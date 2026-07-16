@@ -1,0 +1,9 @@
+<div class="login-wrap">
+  <form (ngSubmit)="login()" class="login-card">
+    <h1>POS Login</h1>
+    <input name="email" [(ngModel)]="email" type="email" placeholder="Email" required />
+    <input name="password" [(ngModel)]="password" type="password" placeholder="Password" required />
+    <button type="submit">Sign in</button>
+    <p class="error" *ngIf="error">{{ error }}</p>
+  </form>
+</div>
