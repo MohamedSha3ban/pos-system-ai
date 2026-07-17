@@ -1,6 +1,9 @@
 <div class="pos-layout">
   <section class="catalog">
-    <h2>Catalog</h2>
+    <div class="catalog-header">
+      <h2>Catalog</h2>
+      <a routerLink="/products" class="manage-link">Manage catalog →</a>
+    </div>
     <div class="grid">
       <button class="product-tile" *ngFor="let p of products" (click)="addToCart(p)">
         <span class="name">{{ p.name }}</span>

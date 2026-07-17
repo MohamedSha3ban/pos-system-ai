@@ -10,6 +10,7 @@ class OrderService {
     required List<CartLine> cart,
     required String paymentMethod,
     required double amount,
+    String? paymentToken,
   }) async {
     final body = {
       'locationId': locationId,
@@ -22,7 +23,7 @@ class OrderService {
               })
           .toList(),
       'tenders': [
-        {'method': paymentMethod, 'amount': amount}
+        {'method': paymentMethod, 'amount': amount, 'paymentToken': paymentToken}
       ],
       'tipTotal': 0,
     };

@@ -31,3 +31,34 @@ export interface OrderResponse {
   grandTotal: number;
   createdAtUtc: string;
 }
+
+export interface Category {
+  id: string;
+  name: string;
+  productCount: number;
+}
+
+export interface AdminProduct {
+  id: string;
+  name: string;
+  description?: string;
+  sku: string;
+  barcode?: string;
+  price: number;
+  costPrice?: number;
+  categoryId?: string;
+  categoryName?: string;
+  isActive: boolean;
+  quantityOnHand: number;
+}
+
+export interface UpsertProductRequest {
+  name: string;
+  description?: string;
+  sku: string;
+  barcode?: string;
+  price: number;
+  costPrice?: number;
+  categoryId?: string;
+  isActive: boolean;
+}

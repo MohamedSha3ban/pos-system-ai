@@ -1,36 +1,40 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using POS.Application.Interfaces;
-using POS.Application.Services;
-using POS.Infrastructure.Auth;
+using POS.Application.Common.Interfaces;
+using POS.Application.Modules.Catalog;
+using POS.Application.Modules.Identity;
+using POS.Application.Modules.Orders;
+using POS.Infrastructure.Modules.Identity;
+using POS.Infrastructure.Modules.Insights;
+using POS.Infrastructure.Modules.Payments;
 using POS.Infrastructure.Persistence;
-using POS.Infrastructure.Services;
 
 namespace POS.Infrastructure;
 
+/// <summary>
+/// Composition root for the whole backend. Each bounded-context module exposes its own
+/// AddXModule() extension (Application layer: use-cases/services; Infrastructure layer:
+/// concrete implementations) so modules stay independently registerable/testable and
+/// could be extracted into separate services later with minimal rewiring here.
+/// </summary>
 public static class DependencyInjection
 {
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration config)
     {
         services.AddDbContext<ApplicationDbContext>(options =>
             options.UseNpgsql(config.GetConnectionString("Default")));
-
         services.AddScoped<IApplicationDbContext>(sp => sp.GetRequiredService<ApplicationDbContext>());
 
-        services.AddScoped<ITokenService, JwtTokenService>();
-        services.AddScoped<IForecastingService, SimpleMovingAverageForecastingService>();
+        // Application-layer modules (use-cases)
+        services.AddIdentityApplicationModule();
+        services.AddCatalogApplicationModule();
+        services.AddOrdersApplicationModule();
 
-        // Payment orchestration: register one processor per PaymentMethod.
-        // Swap StripeCardPaymentProcessor for AdyenCardPaymentProcessor, etc.,
-        // without touching OrderService.
-        services.AddScoped<IPaymentProcessor, CashPaymentProcessor>();
-        services.AddScoped<IPaymentProcessor, StripeCardPaymentProcessor>();
-        services.AddScoped<IPaymentProcessor, DigitalWalletPaymentProcessor>();
-
-        services.AddScoped<AuthService>();
-        services.AddScoped<ProductService>();
-        services.AddScoped<OrderService>();
+        // Infrastructure-layer modules (concrete implementations)
+        services.AddIdentityInfrastructureModule();
+        services.AddPaymentsInfrastructureModule(config);
+        services.AddInsightsInfrastructureModule();
 
         return services;
     }

@@ -1,6 +1,7 @@
 import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import { Product, CartLine } from '../../core/models/models';
 import { ProductService } from '../../core/services/product.service';
 import { OrderService, Tender } from '../../core/services/order.service';
@@ -11,7 +12,7 @@ const DEFAULT_LOCATION_ID = '00000000-0000-0000-0000-000000000000';
 @Component({
   selector: 'app-pos',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, RouterLink],
   templateUrl: './pos.component.html'
 })
 export class PosComponent implements OnInit {

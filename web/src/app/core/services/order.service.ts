@@ -4,7 +4,12 @@ import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { CartLine, OrderResponse } from '../models/models';
 
-export interface Tender { method: string; amount: number; }
+export interface Tender {
+  method: string;
+  amount: number;
+  /** Stripe PaymentMethod/PaymentIntent id from StripeService.createIntent + client-side confirmation. Omit for Cash. */
+  paymentToken?: string;
+}
 
 @Injectable({ providedIn: 'root' })
 export class OrderService {
@@ -15,7 +20,7 @@ export class OrderService {
       locationId,
       customerId: null,
       items: cart.map(c => ({ productId: c.product.id, quantity: c.quantity, lineDiscount: 0 })),
-      tenders,
+      tenders: tenders.map(t => ({ method: t.method, amount: t.amount, paymentToken: t.paymentToken ?? null })),
       tipTotal
     };
     return this.http.post<OrderResponse>(`${environment.apiBaseUrl}/orders/checkout`, body);

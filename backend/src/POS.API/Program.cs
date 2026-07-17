@@ -11,6 +11,8 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+// Composition root: wires up the Identity, Catalog, Orders, Payments, and Insights
+// modules (see POS.Infrastructure/DependencyInjection.cs).
 builder.Services.AddInfrastructure(builder.Configuration);
 
 builder.Services.AddCors(options =>

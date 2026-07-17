@@ -9,6 +9,7 @@
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.4" />
     <PackageReference Include="Microsoft.IdentityModel.Tokens" Version="8.0.1" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.0.1" />
+    <PackageReference Include="Stripe.net" Version="46.5.0" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\POS.Application\POS.Application.csproj" />

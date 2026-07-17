@@ -4,6 +4,7 @@ import '../models/product.dart';
 import '../models/cart_line.dart';
 import '../services/product_service.dart';
 import '../services/order_service.dart';
+import 'products_admin_screen.dart';
 
 // TODO: replace with the real active-location id from tenant/session context.
 const String defaultLocationId = '00000000-0000-0000-0000-000000000000';
@@ -78,7 +79,21 @@ class _PosScreenState extends State<PosScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('POS')),
+      appBar: AppBar(
+        title: const Text('POS'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.inventory_2_outlined),
+            tooltip: 'Manage catalog',
+            onPressed: () async {
+              await Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const ProductsAdminScreen()),
+              );
+              _loadCatalog(); // refresh in case products/stock changed
+            },
+          ),
+        ],
+      ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : Column(
