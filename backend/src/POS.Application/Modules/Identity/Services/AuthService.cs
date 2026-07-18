@@ -9,15 +9,23 @@ namespace POS.Application.Modules.Identity.Services;
 
 public class AuthService
 {
-    private readonly IApplicationDbContext _db;
+    private readonly IWriteDbContext _writeDb;
+    private readonly IReadDbContext _readDb;
     private readonly ITokenService _tokenService;
 
-    public AuthService(IApplicationDbContext db, ITokenService tokenService)
+    public AuthService(IWriteDbContext writeDb, IReadDbContext readDb, ITokenService tokenService)
     {
-        _db = db;
+        _writeDb = writeDb;
+        _readDb = readDb;
         _tokenService = tokenService;
     }
 
+    /// <summary>
+    /// Everything here goes through the write context, including the response construction
+    /// at the end -- we just created this tenant/roles/user, so we build the AuthResponse
+    /// from the in-memory objects rather than re-querying (which, against a real replica,
+    /// could momentarily 404 due to replication lag).
+    /// </summary>
     public async Task<AuthResponse> RegisterTenantAsync(RegisterTenantRequest request, CancellationToken ct = default)
     {
         var tenant = new Tenant
@@ -25,14 +33,14 @@ public class AuthService
             BusinessName = request.BusinessName,
             BusinessType = request.BusinessType
         };
-        _db.Tenants.Add(tenant);
+        _writeDb.Tenants.Add(tenant);
 
         var defaultLocation = new Location
         {
             TenantId = tenant.Id,
             Name = "Main Location"
         };
-        _db.Locations.Add(defaultLocation);
+        _writeDb.Locations.Add(defaultLocation);
 
         // Seed the three default roles every tenant starts with. Owner/Manager/Cashier
         // are IsSystemRole=true (can be edited but not deleted) -- tenants can add their
@@ -52,7 +60,7 @@ public class AuthService
             IsSystemRole = true,
             PermissionsCsv = string.Join(',', new[] { Permissions.OrdersCheckout, Permissions.OrdersView })
         };
-        _db.Roles.AddRange(ownerRole, managerRole, cashierRole);
+        _writeDb.Roles.AddRange(ownerRole, managerRole, cashierRole);
 
         var owner = new User
         {
@@ -61,31 +69,36 @@ public class AuthService
             Email = request.OwnerEmail.ToLowerInvariant(),
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.OwnerPassword)
         };
-        _db.Users.Add(owner);
+        _writeDb.Users.Add(owner);
 
-        _db.UserRoleAssignments.Add(new UserRoleAssignment { TenantId = tenant.Id, UserId = owner.Id, RoleId = ownerRole.Id });
+        _writeDb.UserRoleAssignments.Add(new UserRoleAssignment { TenantId = tenant.Id, UserId = owner.Id, RoleId = ownerRole.Id });
 
-        await _db.SaveChangesAsync(ct);
+        await _writeDb.SaveChangesAsync(ct);
 
         var permissions = Permissions.TenantAssignable.ToList();
         var token = _tokenService.GenerateToken(owner, new[] { ownerRole.Name }, permissions);
         return new AuthResponse(token, DateTime.UtcNow.AddHours(8), owner.FullName, tenant.Id, owner.IsPlatformAdmin, new List<string> { ownerRole.Name }, permissions);
     }
 
+    /// <summary>
+    /// Pure read -- uses the read side. Login happening moments after registration and
+    /// briefly hitting replication lag is an accepted, standard trade-off (retry succeeds);
+    /// nothing here writes.
+    /// </summary>
     public async Task<AuthResponse?> LoginAsync(LoginRequest request, CancellationToken ct = default)
     {
         var email = request.Email.ToLowerInvariant();
-        var user = await _db.Users.FirstOrDefaultAsync(u => u.Email == email && !u.IsDeleted && u.IsActive, ct);
+        var user = await _readDb.Users.FirstOrDefaultAsync(u => u.Email == email && !u.IsDeleted && u.IsActive, ct);
 
         if (user is null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
             return null;
 
-        var roleIds = await _db.UserRoleAssignments
+        var roleIds = await _readDb.UserRoleAssignments
             .Where(ura => ura.UserId == user.Id)
             .Select(ura => ura.RoleId)
             .ToListAsync(ct);
 
-        var roles = await _db.Roles.Where(r => roleIds.Contains(r.Id)).ToListAsync(ct);
+        var roles = await _readDb.Roles.Where(r => roleIds.Contains(r.Id)).ToListAsync(ct);
         var roleNames = roles.Select(r => r.Name).ToList();
         var permissions = roles
             .SelectMany(r => r.PermissionsCsv.Split(',', StringSplitOptions.RemoveEmptyEntries))

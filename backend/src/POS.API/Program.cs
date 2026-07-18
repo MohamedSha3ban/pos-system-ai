@@ -17,9 +17,9 @@ builder.Services.AddInfrastructure(builder.Configuration);
 
 builder.Services.AddCors(options =>
 {
-    // Angular dev server + Flutter web/mobile clients.
+    // Admin portal (web-admin), storefront (web-storefront), + Flutter web/mobile clients.
     options.AddPolicy("Clients", policy =>
-        policy.WithOrigins("http://localhost:4200")
+        policy.WithOrigins("http://localhost:4200", "http://localhost:4201")
               .AllowAnyHeader()
               .AllowAnyMethod());
 });
@@ -49,8 +49,9 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
     // Auto-migrate in dev for convenience; use proper migration deploys in prod.
+    // Only WriteDbContext ever runs migrations -- see WriteDbContext's doc comment.
     using var scope = app.Services.CreateScope();
-    var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    var db = scope.ServiceProvider.GetRequiredService<WriteDbContext>();
     db.Database.Migrate();
 }
 

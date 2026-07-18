@@ -11,15 +11,22 @@ namespace POS.Application.Modules.Orders.Services;
 /// Core checkout flow, shared by both the staff-facing in-store POS and the
 /// customer-facing storefront: builds the order, decrements stock, and charges each
 /// tender through the matching IPaymentProcessor. Supports split tenders.
+///
+/// Deliberately uses ONLY IWriteDbContext, never IReadDbContext, for the whole operation
+/// -- including the product/price/stock lookups that precede the writes. This is the
+/// textbook reason a checkout flow should never read from a replica: "is this in stock,
+/// what does it cost" must reflect the primary's current state, not a copy that might be
+/// milliseconds (or, under replica lag, much longer) behind. Reading and writing through
+/// the same context/connection here is what keeps the whole operation consistent.
 /// </summary>
 public class OrderService
 {
-    private readonly IApplicationDbContext _db;
+    private readonly IWriteDbContext _writeDb;
     private readonly IEnumerable<IPaymentProcessor> _paymentProcessors;
 
-    public OrderService(IApplicationDbContext db, IEnumerable<IPaymentProcessor> paymentProcessors)
+    public OrderService(IWriteDbContext writeDb, IEnumerable<IPaymentProcessor> paymentProcessors)
     {
-        _db = db;
+        _writeDb = writeDb;
         _paymentProcessors = paymentProcessors;
     }
 
@@ -30,7 +37,7 @@ public class OrderService
         CreateOrderRequest request, CancellationToken ct = default)
     {
         var productIds = request.Items.Select(i => i.ProductId).ToList();
-        var products = await _db.Products
+        var products = await _writeDb.Products
             .Where(p => productIds.Contains(p.Id) && p.TenantId == tenantId)
             .ToDictionaryAsync(p => p.Id, ct);
 
@@ -68,7 +75,7 @@ public class OrderService
             subtotal += product.Price * item.Quantity;
             discountTotal += lineDiscount;
 
-            var inventory = await _db.InventoryItems.FirstOrDefaultAsync(
+            var inventory = await _writeDb.InventoryItems.FirstOrDefaultAsync(
                 i => i.ProductId == product.Id && i.LocationId == request.LocationId, ct);
             if (inventory != null)
                 inventory.QuantityOnHand -= item.Quantity;
@@ -107,8 +114,8 @@ public class OrderService
         }
 
         order.Status = OrderStatus.Completed;
-        _db.Orders.Add(order);
-        await _db.SaveChangesAsync(ct);
+        _writeDb.Orders.Add(order);
+        await _writeDb.SaveChangesAsync(ct);
 
         return new OrderResponse(order.Id, order.Status, order.Channel, order.Subtotal, order.TaxTotal, order.DiscountTotal, order.TipTotal, order.GrandTotal, order.CreatedAtUtc);
     }

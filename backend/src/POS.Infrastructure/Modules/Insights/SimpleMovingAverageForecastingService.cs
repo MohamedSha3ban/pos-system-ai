@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
+using POS.Application.Common.Interfaces;
 using POS.Application.Modules.Insights.Interfaces;
-using POS.Infrastructure.Persistence;
 
 namespace POS.Infrastructure.Modules.Insights;
 
@@ -8,23 +8,28 @@ namespace POS.Infrastructure.Modules.Insights;
 /// Baseline forecasting: 30-day moving average per product, projected 7 days forward,
 /// flagged against ReorderPoint. Swap for a real time-series model (Prophet/LightGBM)
 /// or an external ML service later -- callers only depend on IForecastingService.
+///
+/// Uses IReadDbContext exclusively -- this is the canonical case for the read/write split:
+/// a heavier analytical query, scanning 30 days of order history, that has no reason to
+/// compete with checkout traffic for capacity on the primary. Being a few seconds stale
+/// against a replica is irrelevant for a "should I reorder this" suggestion.
 /// </summary>
 public class SimpleMovingAverageForecastingService : IForecastingService
 {
-    private readonly ApplicationDbContext _db;
-    public SimpleMovingAverageForecastingService(ApplicationDbContext db) => _db = db;
+    private readonly IReadDbContext _readDb;
+    public SimpleMovingAverageForecastingService(IReadDbContext readDb) => _readDb = readDb;
 
     public async Task<List<DemandForecast>> GetLowStockForecastsAsync(Guid tenantId, Guid locationId, CancellationToken ct = default)
     {
         var cutoff = DateTime.UtcNow.AddDays(-30);
 
-        var salesByProduct = await _db.OrderItems
+        var salesByProduct = await _readDb.OrderItems
             .Where(oi => oi.TenantId == tenantId && oi.CreatedAtUtc >= cutoff)
             .GroupBy(oi => oi.ProductId)
             .Select(g => new { ProductId = g.Key, TotalUnits = g.Sum(x => x.Quantity) })
             .ToListAsync(ct);
 
-        var inventory = await _db.InventoryItems
+        var inventory = await _readDb.InventoryItems
             .Include(i => i.Product)
             .Where(i => i.TenantId == tenantId && i.LocationId == locationId)
             .ToListAsync(ct);

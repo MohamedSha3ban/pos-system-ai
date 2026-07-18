@@ -39,7 +39,23 @@ Customer identity is deliberately separate from staff `User`/`Role` -- a `Custom
 Alongside `ProductsController`'s existing stock field, there's now a dedicated `InventoryController` (`GET/PATCH /api/inventory`) that lists stock across every location with reorder points and a `isLow` flag -- the admin portal's Inventory screen.
 
 ### Migration
-Rewritten (still hand-authored -- see the in-file comment) to include the RBAC tables, `Order.Channel`, nullable `CashierUserId`, `Tenant.IsActive`, and `Customer.PasswordHash`. Same caveat as before: delete it and run `dotnet ef migrations add InitialCreate` locally once you can restore packages, to get a tooling-verified migration + Designer/Snapshot files.
+Rewritten (still hand-authored -- see the in-file comment) to include the RBAC tables, `Order.Channel`, nullable `CashierUserId`, `Tenant.IsActive`, and `Customer.PasswordHash`. Same caveat as before: delete it and run `dotnet ef migrations add InitialCreate --context WriteDbContext` locally once you can restore packages, to get a tooling-verified migration + Designer/Snapshot files. Only `WriteDbContext` ever gets migrations -- see the read/write split section below.
+
+### Read/write database split (CQRS-lite)
+Two `DbContext`s, two connection strings, wired through the same DI-registered interfaces every service already depended on -- **`IWriteDbContext`** (exposes `DbSet<T>`, backed by `WriteDbContext`, always the primary database) and **`IReadDbContext`** (exposes `IQueryable<T>` only -- no `Add`/`Update`/`Remove`/`SaveChanges` reachable through the type at all -- backed by `ReadDbContext`, points at a read replica in production).
+
+**The split isn't "all reads go to Read."** Every service was reviewed individually: a read that must be consistent with a write *in the same operation* stays on `IWriteDbContext`; an independent read (a list screen, a login lookup, an analytics query) goes to `IReadDbContext`. Concretely:
+
+| Goes through **Write** | Goes through **Read** |
+|---|---|
+| `OrderService.CreateOrderAsync` -- entirely on Write, including the product/price/stock lookups. Checkout deciding "is this in stock" against a possibly-lagging replica is the textbook reason not to split this. | `ProductService.GetCatalogAsync` / `GetByIdAsync` -- the highest-traffic read in the app (POS, storefront, admin grid all hit this) |
+| Every `Create`/`Update`/`Delete` method -- writes, then builds its response DTO from the entities already in the write context's tracker rather than re-querying (avoids a just-created row briefly 404ing against a lagging replica) | `UserService.GetAllAsync`, `RoleService.GetAllAsync`, `TenantService.GetAllAsync`, `InventoryService.GetAllAsync` -- independent list screens |
+| `CustomerAuthService.RegisterAsync` -- check-email-then-create needs to see its own check | `AuthService.LoginAsync`, `CustomerAuthService.LoginAsync` -- pure reads; a login moments after registration hitting replication lag is an accepted, retry-succeeds trade-off |
+| `RoleService.DeleteAsync`'s "is this role still assigned to anyone" guard -- must see current state before deleting | `SimpleMovingAverageForecastingService` (the AI reorder-suggestions feature) -- a heavier 30-day analytical scan with no reason to compete with checkout traffic on the primary |
+
+**Schema is shared, migrations are not.** `PosModelConfiguration.Configure()` (`POS.Infrastructure/Persistence`) holds the entity mapping both contexts use -- same tables, same indexes, same relationships -- so there's one place to change it. Only `WriteDbContext` ever gets a migration; `ReadDbContext`'s schema is expected to arrive via database-level replication (e.g. Postgres streaming replication) in production, exactly like its data does.
+
+**Local dev without replica infrastructure:** `appsettings.json` has separate `Write` and `Read` connection strings; point both at the same local Postgres database and everything works correctly -- you just don't get the actual scaling benefit until you add a real replica and repoint `Read` at it.
 
 ### Seeding a platform admin
 There's no API for this by design (it shouldn't be self-service). After registering at least one tenant through the admin portal, run:
@@ -73,7 +89,7 @@ A separate, standalone Angular app -- deliberately has no knowledge of staff aut
 # Backend
 cd backend
 dotnet restore
-dotnet ef migrations add InitialCreate --project src/POS.Infrastructure --startup-project src/POS.API
+dotnet ef migrations add InitialCreate --context WriteDbContext --project src/POS.Infrastructure --startup-project src/POS.API
 dotnet run --project src/POS.API   # Swagger at https://localhost:5001/swagger
 
 # Admin portal
@@ -94,10 +110,11 @@ flutter run
 
 ## Suggested next implementation steps (in order)
 
-1. Run `dotnet ef migrations add InitialCreate` locally and confirm both portals end-to-end against Postgres.
-2. Seed a platform admin (see above) and confirm the Tenants screen in web-admin.
-3. Wire up real Stripe Elements (both web apps) / `flutter_stripe` (mobile) client-side card collection.
-4. Resolve storefront tenant by subdomain/custom domain instead of a hardcoded `environment.ts` value, if you want one storefront deployment to serve multiple tenants.
-5. Extend the Flutter app with the same Users/Roles/Tenants/Inventory screens, or build a Flutter storefront app mirroring `web-storefront` -- same backend, no new endpoints needed.
-6. Add a real tax engine, refunds/voids, regional payment rails (still open from before -- see `OrderService`/`IPaymentProcessor`).
-7. Layer in the LLM-based "ask your data" reporting feature from the original plan (Insights module).
+1. Run `dotnet ef migrations add InitialCreate --context WriteDbContext` locally and confirm both portals end-to-end against Postgres.
+2. Provision an actual Postgres read replica and point the `Read` connection string at it -- right now both connection strings point at the same database, so the split is architecturally real but not yet delivering its scaling benefit.
+3. Seed a platform admin (see above) and confirm the Tenants screen in web-admin.
+4. Wire up real Stripe Elements (both web apps) / `flutter_stripe` (mobile) client-side card collection.
+5. Resolve storefront tenant by subdomain/custom domain instead of a hardcoded `environment.ts` value, if you want one storefront deployment to serve multiple tenants.
+6. Extend the Flutter app with the same Users/Roles/Tenants/Inventory screens, or build a Flutter storefront app mirroring `web-storefront` -- same backend, no new endpoints needed.
+7. Add a real tax engine, refunds/voids, regional payment rails (still open from before -- see `OrderService`/`IPaymentProcessor`).
+8. Layer in the LLM-based "ask your data" reporting feature from the original plan (Insights module).

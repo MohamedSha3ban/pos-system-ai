@@ -1,5 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using POS.Application.Common.Interfaces;
 using POS.Domain.Modules.Identity.Entities;
 using POS.Domain.Modules.Catalog.Entities;
 using POS.Domain.Modules.Orders.Entities;
@@ -7,36 +6,32 @@ using POS.Domain.Modules.Orders.Entities;
 namespace POS.Infrastructure.Persistence;
 
 /// <summary>
-/// A single shared DbContext currently backs all modules (simplest path for a starter/
-/// modular-monolith). Each module only touches its own DbSets in code, so if a module
-/// ever needs to become its own service, its tables can be split into a dedicated
-/// DbContext + database with minimal churn elsewhere.
+/// Entity mapping shared by both WriteDbContext and ReadDbContext -- the read side is a
+/// replica of the exact same schema, so this configuration lives in one place rather than
+/// being duplicated across two OnModelCreating overrides and risking drift between them.
 /// </summary>
-public class ApplicationDbContext : DbContext, IApplicationDbContext
+public static class PosModelConfiguration
 {
-    public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options) : base(options) { }
-
-    // Identity module
-    public DbSet<Tenant> Tenants => Set<Tenant>();
-    public DbSet<Location> Locations => Set<Location>();
-    public DbSet<User> Users => Set<User>();
-    public DbSet<Role> Roles => Set<Role>();
-    public DbSet<UserRoleAssignment> UserRoleAssignments => Set<UserRoleAssignment>();
-
-    // Catalog module
-    public DbSet<Category> Categories => Set<Category>();
-    public DbSet<Product> Products => Set<Product>();
-    public DbSet<InventoryItem> InventoryItems => Set<InventoryItem>();
-
-    // Orders module
-    public DbSet<Customer> Customers => Set<Customer>();
-    public DbSet<Order> Orders => Set<Order>();
-    public DbSet<OrderItem> OrderItems => Set<OrderItem>();
-    public DbSet<Payment> Payments => Set<Payment>();
-
-    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    public static void Configure(ModelBuilder modelBuilder)
     {
-        base.OnModelCreating(modelBuilder);
+        // ReadDbContext exposes IQueryable<T>, not DbSet<T> -- EF's default entity
+        // discovery convention looks for DbSet<T> properties, so without these explicit
+        // registrations ReadDbContext would silently fail to discover several entity
+        // types (any not otherwise referenced by a fluent HasOne/HasIndex/etc. call
+        // below). Registering every entity explicitly makes discovery correct regardless
+        // of which CLR property type the context exposes it as.
+        modelBuilder.Entity<Tenant>();
+        modelBuilder.Entity<Location>();
+        modelBuilder.Entity<User>();
+        modelBuilder.Entity<Role>();
+        modelBuilder.Entity<UserRoleAssignment>();
+        modelBuilder.Entity<Category>();
+        modelBuilder.Entity<Product>();
+        modelBuilder.Entity<InventoryItem>();
+        modelBuilder.Entity<Customer>();
+        modelBuilder.Entity<Order>();
+        modelBuilder.Entity<OrderItem>();
+        modelBuilder.Entity<Payment>();
 
         modelBuilder.Entity<Product>().HasQueryFilter(p => !p.IsDeleted);
         modelBuilder.Entity<Category>().HasQueryFilter(c => !c.IsDeleted);
@@ -78,9 +73,6 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
             .HasForeignKey(p => p.OrderId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        // UserRoleAssignment has two FK-shaped scalar props (UserId, RoleId) without
-        // navigation properties -- no navigation-based relationship for EF to discover
-        // by convention, so both are configured explicitly here.
         modelBuilder.Entity<UserRoleAssignment>()
             .HasOne<User>()
             .WithMany()

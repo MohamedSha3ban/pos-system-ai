@@ -6,22 +6,27 @@ namespace POS.Application.Modules.Identity.Services;
 
 /// <summary>
 /// Platform-level (cross-tenant) tenant management -- backs the admin portal's Tenants
-/// screen, which only a User with IsPlatformAdmin=true can reach (see
-/// POS.API/Authorization/RequirePlatformAdminAttribute). New tenants are still created
-/// through AuthService.RegisterTenantAsync (the normal signup flow); this service is
-/// for the platform operator's read/deactivate view across all of them.
+/// screen, which only a User with IsPlatformAdmin=true can reach.
 /// </summary>
 public class TenantService
 {
-    private readonly IApplicationDbContext _db;
-    public TenantService(IApplicationDbContext db) => _db = db;
+    private readonly IWriteDbContext _writeDb;
+    private readonly IReadDbContext _readDb;
 
+    public TenantService(IWriteDbContext writeDb, IReadDbContext readDb)
+    {
+        _writeDb = writeDb;
+        _readDb = readDb;
+    }
+
+    /// <summary>Cross-tenant aggregation read -- exactly the kind of heavier, independent
+    /// query that benefits most from running against a replica. Read side.</summary>
     public async Task<List<TenantSummaryDto>> GetAllAsync(CancellationToken ct = default)
     {
-        var tenants = await _db.Tenants.ToListAsync(ct);
-        var userCounts = await _db.Users.Where(u => !u.IsDeleted).GroupBy(u => u.TenantId)
+        var tenants = await _readDb.Tenants.ToListAsync(ct);
+        var userCounts = await _readDb.Users.Where(u => !u.IsDeleted).GroupBy(u => u.TenantId)
             .Select(g => new { TenantId = g.Key, Count = g.Count() }).ToListAsync(ct);
-        var productCounts = await _db.Products.Where(p => !p.IsDeleted).GroupBy(p => p.TenantId)
+        var productCounts = await _readDb.Products.Where(p => !p.IsDeleted).GroupBy(p => p.TenantId)
             .Select(g => new { TenantId = g.Key, Count = g.Count() }).ToListAsync(ct);
 
         return tenants.Select(t => new TenantSummaryDto(
@@ -33,10 +38,10 @@ public class TenantService
 
     public async Task<bool> SetActiveAsync(Guid tenantId, bool isActive, CancellationToken ct = default)
     {
-        var tenant = await _db.Tenants.FirstOrDefaultAsync(t => t.Id == tenantId, ct);
+        var tenant = await _writeDb.Tenants.FirstOrDefaultAsync(t => t.Id == tenantId, ct);
         if (tenant is null) return false;
         tenant.IsActive = isActive;
-        await _db.SaveChangesAsync(ct);
+        await _writeDb.SaveChangesAsync(ct);
         return true;
     }
 }

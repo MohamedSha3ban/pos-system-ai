@@ -23,9 +23,17 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration config)
     {
-        services.AddDbContext<ApplicationDbContext>(options =>
-            options.UseNpgsql(config.GetConnectionString("Default")));
-        services.AddScoped<IApplicationDbContext>(sp => sp.GetRequiredService<ApplicationDbContext>());
+        // CQRS-lite: two DbContexts, two connection strings. "Read" falls back to "Write"
+        // so local dev works out of the box against a single database with no replica --
+        // point "Read" at an actual replica host in production to get the scaling benefit.
+        var writeConnectionString = config.GetConnectionString("Write");
+        var readConnectionString = config.GetConnectionString("Read") ?? writeConnectionString;
+
+        services.AddDbContext<WriteDbContext>(options => options.UseNpgsql(writeConnectionString));
+        services.AddDbContext<ReadDbContext>(options => options.UseNpgsql(readConnectionString));
+
+        services.AddScoped<IWriteDbContext>(sp => sp.GetRequiredService<WriteDbContext>());
+        services.AddScoped<IReadDbContext>(sp => sp.GetRequiredService<ReadDbContext>());
 
         // Application-layer modules (use-cases)
         services.AddIdentityApplicationModule();

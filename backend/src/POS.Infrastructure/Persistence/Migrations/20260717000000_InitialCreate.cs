@@ -4,17 +4,19 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace POS.Infrastructure.Persistence.Migrations
 {
-    // IMPORTANT: hand-authored to match ApplicationDbContext exactly, because this sandbox
-    // has no network access to NuGet and can't run `dotnet ef migrations add`. Intentionally
-    // MISSING: the companion `.Designer.cs` + `ApplicationDbContextModelSnapshot.cs` that the
+    // IMPORTANT: hand-authored to match WriteDbContext exactly (ReadDbContext maps the
+    // same schema via PosModelConfiguration but never gets migrations of its own -- its
+    // data arrives via database replication in production), because this sandbox has no
+    // network access to NuGet and can't run `dotnet ef migrations add`. Intentionally
+    // MISSING: the companion `.Designer.cs` + `WriteDbContextModelSnapshot.cs` that the
     // EF CLI normally generates -- those encode a full serialized model snapshot for EF's
     // tooling to diff future migrations against, and hand-rolling them reliably isn't
     // possible without the actual tool.
     //
     // Recommended: once you can restore packages locally, delete this file and run
-    //   dotnet ef migrations add InitialCreate --project src/POS.Infrastructure --startup-project src/POS.API
-    // EF will generate the correct migration (Up/Down + Designer + Snapshot) from the current
-    // model -- diff it against this file as a sanity check; the schema should match.
+    //   dotnet ef migrations add InitialCreate --context WriteDbContext --project src/POS.Infrastructure --startup-project src/POS.API
+    // EF will generate the correct migration (Up/Down + Designer + Snapshot) from the
+    // current model -- diff it against this file as a sanity check; the schema should match.
     /// <inheritdoc />
     public partial class InitialCreate : Migration
     {
