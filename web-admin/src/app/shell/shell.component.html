@@ -1,0 +1,20 @@
+<div class="shell">
+  <aside class="sidebar">
+    <div class="brand">POS Admin</div>
+    <nav>
+      <a routerLink="/pos" routerLinkActive="active">Checkout (POS)</a>
+      <a routerLink="/products" routerLinkActive="active">Products</a>
+      <a routerLink="/inventory" routerLinkActive="active" *ngIf="hasPermission('inventory.manage')">Inventory</a>
+      <a routerLink="/users" routerLinkActive="active" *ngIf="hasPermission('users.manage')">Users</a>
+      <a routerLink="/roles" routerLinkActive="active" *ngIf="hasPermission('roles.manage')">Roles & Permissions</a>
+      <a routerLink="/tenants" routerLinkActive="active" *ngIf="isPlatformAdmin">Tenants</a>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="user-name">{{ session?.fullName }}</div>
+      <button (click)="logout()">Log out</button>
+    </div>
+  </aside>
+  <main class="content">
+    <router-outlet></router-outlet>
+  </main>
+</div>

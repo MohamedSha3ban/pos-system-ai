@@ -1,8 +1,10 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using POS.API.Authorization;
 using POS.Application.Modules.Catalog.DTOs;
 using POS.Application.Modules.Catalog.Services;
+using POS.Domain.Common;
 
 namespace POS.API.Controllers.Catalog;
 
@@ -21,10 +23,12 @@ public class CategoriesController : ControllerBase
         => Ok(await _categoryService.GetAllAsync(TenantId, ct));
 
     [HttpPost]
+    [RequirePermission(Permissions.CategoriesManage)]
     public async Task<ActionResult<CategoryDto>> Create(UpsertCategoryRequest request, CancellationToken ct)
         => Ok(await _categoryService.CreateAsync(TenantId, request, ct));
 
     [HttpPut("{id:guid}")]
+    [RequirePermission(Permissions.CategoriesManage)]
     public async Task<ActionResult<CategoryDto>> Update(Guid id, UpsertCategoryRequest request, CancellationToken ct)
     {
         var updated = await _categoryService.UpdateAsync(TenantId, id, request, ct);
@@ -32,6 +36,7 @@ public class CategoriesController : ControllerBase
     }
 
     [HttpDelete("{id:guid}")]
+    [RequirePermission(Permissions.CategoriesManage)]
     public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
     {
         var deleted = await _categoryService.DeleteAsync(TenantId, id, ct);

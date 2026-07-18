@@ -6,7 +6,10 @@ namespace POS.Domain.Modules.Orders.Entities;
 public class Order : BaseEntity
 {
     public Guid LocationId { get; set; }
-    public Guid CashierUserId { get; set; }
+    public OrderChannel Channel { get; set; } = OrderChannel.InStore;
+
+    /// <summary>Null for Online orders (no staff member rang it up).</summary>
+    public Guid? CashierUserId { get; set; }
     public Guid? CustomerId { get; set; }
     public OrderStatus Status { get; set; } = OrderStatus.Open;
 

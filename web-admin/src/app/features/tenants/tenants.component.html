@@ -1,0 +1,26 @@
+<div class="admin-wrap">
+  <header class="admin-header">
+    <h1>Tenants</h1>
+  </header>
+  <p class="hint">Platform-wide view across every business using this POS -- only visible to platform admins.</p>
+
+  <p class="error" *ngIf="errorMessage">{{ errorMessage }}</p>
+
+  <table class="admin-table" *ngIf="tenants.length">
+    <thead><tr><th>Business</th><th>Type</th><th>Users</th><th>Products</th><th>Created</th><th>Status</th><th></th></tr></thead>
+    <tbody>
+      <tr *ngFor="let t of tenants">
+        <td>{{ t.businessName }}</td>
+        <td>{{ t.businessType }}</td>
+        <td>{{ t.userCount }}</td>
+        <td>{{ t.productCount }}</td>
+        <td>{{ t.createdAtUtc | date:'mediumDate' }}</td>
+        <td>{{ t.isActive ? 'Active' : 'Deactivated' }}</td>
+        <td class="row-actions">
+          <button [class.danger]="t.isActive" (click)="toggleActive(t)">{{ t.isActive ? 'Deactivate' : 'Activate' }}</button>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+  <p *ngIf="!tenants.length">No tenants yet.</p>
+</div>

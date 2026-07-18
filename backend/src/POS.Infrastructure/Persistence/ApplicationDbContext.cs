@@ -20,6 +20,8 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
     public DbSet<Tenant> Tenants => Set<Tenant>();
     public DbSet<Location> Locations => Set<Location>();
     public DbSet<User> Users => Set<User>();
+    public DbSet<Role> Roles => Set<Role>();
+    public DbSet<UserRoleAssignment> UserRoleAssignments => Set<UserRoleAssignment>();
 
     // Catalog module
     public DbSet<Category> Categories => Set<Category>();
@@ -40,10 +42,17 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
         modelBuilder.Entity<Category>().HasQueryFilter(c => !c.IsDeleted);
         modelBuilder.Entity<Order>().HasQueryFilter(o => !o.IsDeleted);
         modelBuilder.Entity<User>().HasQueryFilter(u => !u.IsDeleted);
+        modelBuilder.Entity<Role>().HasQueryFilter(r => !r.IsDeleted);
+        modelBuilder.Entity<Customer>().HasQueryFilter(c => !c.IsDeleted);
 
         modelBuilder.Entity<Product>().HasIndex(p => new { p.TenantId, p.Sku }).IsUnique();
         modelBuilder.Entity<User>().HasIndex(u => u.Email).IsUnique();
         modelBuilder.Entity<InventoryItem>().HasIndex(i => new { i.ProductId, i.LocationId }).IsUnique();
+        modelBuilder.Entity<Role>().HasIndex(r => new { r.TenantId, r.Name }).IsUnique();
+        modelBuilder.Entity<UserRoleAssignment>().HasIndex(a => new { a.UserId, a.RoleId }).IsUnique();
+        modelBuilder.Entity<Customer>().HasIndex(c => new { c.TenantId, c.Email })
+            .IsUnique()
+            .HasFilter("\"Email\" IS NOT NULL");
 
         modelBuilder.Entity<Product>()
             .HasOne(p => p.Category)
@@ -67,6 +76,21 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
             .HasMany(o => o.Payments)
             .WithOne()
             .HasForeignKey(p => p.OrderId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        // UserRoleAssignment has two FK-shaped scalar props (UserId, RoleId) without
+        // navigation properties -- no navigation-based relationship for EF to discover
+        // by convention, so both are configured explicitly here.
+        modelBuilder.Entity<UserRoleAssignment>()
+            .HasOne<User>()
+            .WithMany()
+            .HasForeignKey(a => a.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<UserRoleAssignment>()
+            .HasOne<Role>()
+            .WithMany()
+            .HasForeignKey(a => a.RoleId)
             .OnDelete(DeleteBehavior.Cascade);
 
         foreach (var entity in modelBuilder.Model.GetEntityTypes())

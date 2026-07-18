@@ -1,0 +1,49 @@
+<div class="admin-wrap">
+  <header class="admin-header">
+    <h1>Roles & Permissions</h1>
+    <button (click)="openCreateForm()">+ New role</button>
+  </header>
+
+  <p class="error" *ngIf="errorMessage">{{ errorMessage }}</p>
+
+  <table class="admin-table" *ngIf="roles.length">
+    <thead><tr><th>Name</th><th>Permissions</th><th></th></tr></thead>
+    <tbody>
+      <tr *ngFor="let r of roles">
+        <td>
+          {{ r.name }}
+          <span class="badge system" *ngIf="r.isSystemRole">System</span>
+        </td>
+        <td>
+          <span class="badge" *ngFor="let p of r.permissions">{{ p }}</span>
+        </td>
+        <td class="row-actions">
+          <button (click)="openEditForm(r)">Edit</button>
+          <button class="danger" (click)="delete(r)" *ngIf="!r.isSystemRole">Delete</button>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="modal-backdrop" *ngIf="showForm">
+    <div class="modal">
+      <h2>{{ editingRoleId ? 'Edit role' : 'New role' }}</h2>
+      <form (ngSubmit)="save()">
+        <label>Name <input name="name" [(ngModel)]="form.name" required [disabled]="!!editingRoleId && roles.find(r => r.id === editingRoleId)?.isSystemRole" /></label>
+
+        <label>Permissions</label>
+        <div class="permission-grid">
+          <label *ngFor="let p of availablePermissions">
+            <input type="checkbox" [checked]="form.permissions.includes(p)" (change)="togglePermission(p, $any($event.target).checked)" />
+            {{ p }}
+          </label>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" (click)="cancel()">Cancel</button>
+          <button type="submit" class="primary">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>

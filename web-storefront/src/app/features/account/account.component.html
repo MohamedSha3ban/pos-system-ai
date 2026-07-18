@@ -1,0 +1,23 @@
+<div class="page narrow">
+  <div *ngIf="account.isLoggedIn(); else loginForm">
+    <h1>Your account</h1>
+    <p>Signed in as <strong>{{ account.getFullName() }}</strong></p>
+    <button (click)="logout()">Log out</button>
+  </div>
+
+  <ng-template #loginForm>
+    <h1>{{ mode === 'login' ? 'Log in' : 'Create account' }}</h1>
+    <div class="auth-toggle">
+      <button [class.active]="mode === 'login'" (click)="mode = 'login'">Log in</button>
+      <button [class.active]="mode === 'register'" (click)="mode = 'register'">Create account</button>
+    </div>
+    <form (ngSubmit)="submit()">
+      <label *ngIf="mode === 'register'">Full name <input name="fullName" [(ngModel)]="form.fullName" required /></label>
+      <label>Email <input name="email" type="email" [(ngModel)]="form.email" required /></label>
+      <label>Password <input name="password" type="password" [(ngModel)]="form.password" required /></label>
+      <label *ngIf="mode === 'register'">Phone (optional) <input name="phone" [(ngModel)]="form.phone" /></label>
+      <p class="error" *ngIf="error">{{ error }}</p>
+      <button type="submit" class="primary" [disabled]="loading">{{ mode === 'login' ? 'Log in' : 'Create account' }}</button>
+    </form>
+  </ng-template>
+</div>

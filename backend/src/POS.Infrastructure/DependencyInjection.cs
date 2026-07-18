@@ -5,6 +5,7 @@ using POS.Application.Common.Interfaces;
 using POS.Application.Modules.Catalog;
 using POS.Application.Modules.Identity;
 using POS.Application.Modules.Orders;
+using POS.Application.Modules.Storefront;
 using POS.Infrastructure.Modules.Identity;
 using POS.Infrastructure.Modules.Insights;
 using POS.Infrastructure.Modules.Payments;
@@ -30,6 +31,7 @@ public static class DependencyInjection
         services.AddIdentityApplicationModule();
         services.AddCatalogApplicationModule();
         services.AddOrdersApplicationModule();
+        services.AddStorefrontApplicationModule();
 
         // Infrastructure-layer modules (concrete implementations)
         services.AddIdentityInfrastructureModule();

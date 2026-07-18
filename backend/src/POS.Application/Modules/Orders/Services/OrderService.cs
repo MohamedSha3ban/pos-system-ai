@@ -8,8 +8,9 @@ using POS.Domain.Modules.Orders.Enums;
 namespace POS.Application.Modules.Orders.Services;
 
 /// <summary>
-/// Core checkout flow: builds the order, decrements stock, and charges each tender
-/// through the matching IPaymentProcessor. Supports split tenders.
+/// Core checkout flow, shared by both the staff-facing in-store POS and the
+/// customer-facing storefront: builds the order, decrements stock, and charges each
+/// tender through the matching IPaymentProcessor. Supports split tenders.
 /// </summary>
 public class OrderService
 {
@@ -22,7 +23,11 @@ public class OrderService
         _paymentProcessors = paymentProcessors;
     }
 
-    public async Task<OrderResponse> CreateOrderAsync(Guid tenantId, Guid cashierUserId, CreateOrderRequest request, CancellationToken ct = default)
+    /// <param name="cashierUserId">Set for in-store staff checkout; null for online customer self-checkout.</param>
+    /// <param name="customerId">Explicit actor for online checkout; for in-store, falls back to request.CustomerId (a cashier attaching a loyalty account) when not supplied.</param>
+    public async Task<OrderResponse> CreateOrderAsync(
+        Guid tenantId, Guid? cashierUserId, Guid? customerId, OrderChannel channel,
+        CreateOrderRequest request, CancellationToken ct = default)
     {
         var productIds = request.Items.Select(i => i.ProductId).ToList();
         var products = await _db.Products
@@ -33,8 +38,9 @@ public class OrderService
         {
             TenantId = tenantId,
             LocationId = request.LocationId,
+            Channel = channel,
             CashierUserId = cashierUserId,
-            CustomerId = request.CustomerId,
+            CustomerId = customerId ?? request.CustomerId,
             TipTotal = request.TipTotal
         };
 
@@ -104,6 +110,6 @@ public class OrderService
         _db.Orders.Add(order);
         await _db.SaveChangesAsync(ct);
 
-        return new OrderResponse(order.Id, order.Status, order.Subtotal, order.TaxTotal, order.DiscountTotal, order.TipTotal, order.GrandTotal, order.CreatedAtUtc);
+        return new OrderResponse(order.Id, order.Status, order.Channel, order.Subtotal, order.TaxTotal, order.DiscountTotal, order.TipTotal, order.GrandTotal, order.CreatedAtUtc);
     }
 }

@@ -12,6 +12,7 @@ public class Tenant
     public string BusinessType { get; set; } = "General";
     public string Currency { get; set; } = "USD";
     public string TimeZone { get; set; } = "UTC";
+    public bool IsActive { get; set; } = true; // platform admin can deactivate a tenant
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 
     public ICollection<User> Users { get; set; } = new List<User>();

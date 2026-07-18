@@ -9,6 +9,7 @@ public static class CatalogApplicationModule
     {
         services.AddScoped<ProductService>();
         services.AddScoped<CategoryService>();
+        services.AddScoped<InventoryService>();
         return services;
     }
 }

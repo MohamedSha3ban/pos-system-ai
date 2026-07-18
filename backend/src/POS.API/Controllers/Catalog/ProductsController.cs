@@ -1,8 +1,10 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using POS.API.Authorization;
 using POS.Application.Modules.Catalog.DTOs;
 using POS.Application.Modules.Catalog.Services;
+using POS.Domain.Common;
 
 namespace POS.API.Controllers.Catalog;
 
@@ -28,10 +30,12 @@ public class ProductsController : ControllerBase
     }
 
     [HttpPost]
+    [RequirePermission(Permissions.ProductsManage)]
     public async Task<ActionResult<ProductDto>> Create(CreateProductRequest request, CancellationToken ct)
         => Ok(await _productService.CreateAsync(TenantId, request, ct));
 
     [HttpPut("{id:guid}")]
+    [RequirePermission(Permissions.ProductsManage)]
     public async Task<ActionResult<ProductDto>> Update(Guid id, [FromQuery] Guid locationId, UpsertProductRequest request, CancellationToken ct)
     {
         var updated = await _productService.UpdateAsync(TenantId, id, request, locationId, ct);
@@ -39,6 +43,7 @@ public class ProductsController : ControllerBase
     }
 
     [HttpDelete("{id:guid}")]
+    [RequirePermission(Permissions.ProductsManage)]
     public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
     {
         var deleted = await _productService.DeleteAsync(TenantId, id, ct);
@@ -46,6 +51,7 @@ public class ProductsController : ControllerBase
     }
 
     [HttpPatch("{id:guid}/stock")]
+    [RequirePermission(Permissions.InventoryManage)]
     public async Task<IActionResult> AdjustStock(Guid id, [FromQuery] Guid locationId, [FromQuery] int quantity, CancellationToken ct)
     {
         var updated = await _productService.AdjustStockAsync(TenantId, id, locationId, quantity, ct);

@@ -1,0 +1,33 @@
+<div class="admin-wrap">
+  <header class="admin-header">
+    <h1>Inventory</h1>
+  </header>
+
+  <p class="error" *ngIf="errorMessage">{{ errorMessage }}</p>
+
+  <table class="admin-table" *ngIf="items.length">
+    <thead><tr><th>Product</th><th>SKU</th><th>Location</th><th>On hand</th><th>Reorder point</th><th></th></tr></thead>
+    <tbody>
+      <tr *ngFor="let i of items">
+        <td>{{ i.productName }}</td>
+        <td>{{ i.sku }}</td>
+        <td>{{ i.locationName }}</td>
+        <td [class.low]="i.isLow">
+          <ng-container *ngIf="editingId !== i.id">{{ i.quantityOnHand }}</ng-container>
+          <input *ngIf="editingId === i.id" type="number" [(ngModel)]="editValue" style="width:70px" />
+        </td>
+        <td>{{ i.reorderPoint }}</td>
+        <td class="row-actions">
+          <ng-container *ngIf="editingId !== i.id">
+            <button (click)="startEdit(i)">Adjust</button>
+          </ng-container>
+          <ng-container *ngIf="editingId === i.id">
+            <button class="primary" (click)="save(i)">Save</button>
+            <button (click)="cancel()">Cancel</button>
+          </ng-container>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+  <p *ngIf="!items.length">No inventory records yet.</p>
+</div>

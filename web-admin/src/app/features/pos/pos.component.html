@@ -1,0 +1,39 @@
+<div class="pos-layout">
+  <section class="catalog">
+    <h2>Catalog</h2>
+    <div class="grid">
+      <button class="product-tile" *ngFor="let p of products" (click)="addToCart(p)">
+        <span class="name">{{ p.name }}</span>
+        <span class="price">{{ p.price | currency }}</span>
+        <span class="stock" [class.low]="p.quantityOnHand <= 5">{{ p.quantityOnHand }} in stock</span>
+      </button>
+    </div>
+  </section>
+
+  <aside class="cart">
+    <h2>Cart</h2>
+    <div class="cart-line" *ngFor="let line of cart">
+      <span>{{ line.product.name }} x{{ line.quantity }}</span>
+      <span>{{ line.product.price * line.quantity | currency }}</span>
+      <button (click)="removeLine(line)">✕</button>
+    </div>
+
+    <div class="cart-total">
+      <strong>Total: {{ subtotal | currency }}</strong>
+    </div>
+
+    <label>
+      Payment method
+      <select [(ngModel)]="paymentMethod" name="paymentMethod">
+        <option *ngFor="let m of paymentMethods" [value]="m">{{ m }}</option>
+      </select>
+    </label>
+
+    <button class="checkout-btn" (click)="checkout()" [disabled]="cart.length === 0">Charge</button>
+
+    <p class="error" *ngIf="errorMessage">{{ errorMessage }}</p>
+    <p class="success" *ngIf="lastOrderTotal !== null">
+      Order complete — charged {{ lastOrderTotal | currency }}
+    </p>
+  </aside>
+</div>

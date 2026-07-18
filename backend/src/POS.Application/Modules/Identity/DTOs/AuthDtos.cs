@@ -9,4 +9,11 @@ public record RegisterTenantRequest(
 
 public record LoginRequest(string Email, string Password);
 
-public record AuthResponse(string Token, DateTime ExpiresAtUtc, string FullName, string Role, Guid TenantId);
+public record AuthResponse(
+    string Token,
+    DateTime ExpiresAtUtc,
+    string FullName,
+    Guid TenantId,
+    bool IsPlatformAdmin,
+    List<string> RoleNames,
+    List<string> Permissions);

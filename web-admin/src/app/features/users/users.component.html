@@ -1,0 +1,53 @@
+<div class="admin-wrap">
+  <header class="admin-header">
+    <h1>Users</h1>
+    <button (click)="openCreateForm()">+ New user</button>
+  </header>
+
+  <p class="error" *ngIf="errorMessage">{{ errorMessage }}</p>
+
+  <table class="admin-table" *ngIf="users.length">
+    <thead><tr><th>Name</th><th>Email</th><th>Roles</th><th>Active</th><th></th></tr></thead>
+    <tbody>
+      <tr *ngFor="let u of users">
+        <td>{{ u.fullName }}</td>
+        <td>{{ u.email }}</td>
+        <td>
+          <span class="badge" *ngFor="let r of u.roles">{{ r.name }}</span>
+        </td>
+        <td>{{ u.isActive ? 'Yes' : 'No' }}</td>
+        <td class="row-actions">
+          <button (click)="openEditForm(u)">Edit</button>
+          <button class="danger" (click)="deactivate(u)" *ngIf="u.isActive">Deactivate</button>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+  <p *ngIf="!users.length">No users yet.</p>
+
+  <div class="modal-backdrop" *ngIf="showForm">
+    <div class="modal">
+      <h2>{{ editingUserId ? 'Edit user' : 'New user' }}</h2>
+      <form (ngSubmit)="save()">
+        <label>Full name <input name="fullName" [(ngModel)]="form.fullName" required /></label>
+        <label *ngIf="!editingUserId">Email <input name="email" type="email" [(ngModel)]="form.email" required /></label>
+        <label *ngIf="!editingUserId">Password <input name="password" type="password" [(ngModel)]="form.password" required /></label>
+
+        <label>Roles</label>
+        <div class="permission-grid">
+          <label *ngFor="let r of roles">
+            <input type="checkbox" [checked]="form.roleIds.includes(r.id)" (change)="toggleRole(r.id, $any($event.target).checked)" />
+            {{ r.name }}
+          </label>
+        </div>
+
+        <label class="checkbox" *ngIf="editingUserId"><input name="isActive" type="checkbox" [(ngModel)]="form.isActive" /> Active</label>
+
+        <div class="modal-actions">
+          <button type="button" (click)="cancel()">Cancel</button>
+          <button type="submit" class="primary">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,20 @@
+<div class="page">
+  <h1>Shop</h1>
+  <p class="error" *ngIf="errorMessage">{{ errorMessage }}</p>
+  <p *ngIf="loading">Loading products…</p>
+
+  <div class="product-grid" *ngIf="!loading && products.length">
+    <div class="product-card" *ngFor="let p of products">
+      <div class="product-name">{{ p.name }}</div>
+      <div class="product-desc" *ngIf="p.description">{{ p.description }}</div>
+      <div class="product-price">{{ p.price | currency }}</div>
+      <div class="product-stock" *ngIf="p.quantityOnHand <= 5 && p.quantityOnHand > 0">Only {{ p.quantityOnHand }} left</div>
+      <div class="product-stock out" *ngIf="p.quantityOnHand <= 0">Out of stock</div>
+      <button (click)="addToCart(p)" [disabled]="p.quantityOnHand <= 0">
+        {{ justAdded === p.id ? 'Added ✓' : 'Add to cart' }}
+      </button>
+    </div>
+  </div>
+
+  <p *ngIf="!loading && !products.length">No products available right now.</p>
+</div>

@@ -16,6 +16,7 @@ public record CreateOrderRequest(
 public record OrderResponse(
     Guid Id,
     OrderStatus Status,
+    OrderChannel Channel,
     decimal Subtotal,
     decimal TaxTotal,
     decimal DiscountTotal,

@@ -1,0 +1,54 @@
+<div class="page narrow">
+  <h1>Checkout</h1>
+
+  <div *ngIf="completedOrderId" class="order-complete">
+    <h2>Order placed 🎉</h2>
+    <p>Order ID: {{ completedOrderId }}</p>
+    <a routerLink="/">Continue shopping →</a>
+  </div>
+
+  <ng-container *ngIf="!completedOrderId">
+    <p *ngIf="!cart.lines().length">Your cart is empty. <a routerLink="/">Go shopping →</a></p>
+
+    <ng-container *ngIf="cart.lines().length">
+      <section *ngIf="!account.isLoggedIn()" class="checkout-section">
+        <h2>Sign in to continue</h2>
+        <div class="auth-toggle">
+          <button [class.active]="authMode === 'login'" (click)="authMode = 'login'">Log in</button>
+          <button [class.active]="authMode === 'register'" (click)="authMode = 'register'">Create account</button>
+        </div>
+        <form (ngSubmit)="submitAuth()">
+          <label *ngIf="authMode === 'register'">Full name <input name="fullName" [(ngModel)]="authForm.fullName" required /></label>
+          <label>Email <input name="email" type="email" [(ngModel)]="authForm.email" required /></label>
+          <label>Password <input name="password" type="password" [(ngModel)]="authForm.password" required /></label>
+          <label *ngIf="authMode === 'register'">Phone (optional) <input name="phone" [(ngModel)]="authForm.phone" /></label>
+          <p class="error" *ngIf="authError">{{ authError }}</p>
+          <button type="submit" class="primary" [disabled]="authLoading">{{ authMode === 'login' ? 'Log in' : 'Create account' }}</button>
+        </form>
+      </section>
+
+      <section *ngIf="account.isLoggedIn()" class="checkout-section">
+        <h2>Order summary</h2>
+        <div class="cart-line" *ngFor="let line of cart.lines()">
+          <span>{{ line.product.name }} x{{ line.quantity }}</span>
+          <span>{{ line.product.price * line.quantity | currency }}</span>
+        </div>
+        <div class="cart-total">Total: {{ cart.subtotal() | currency }}</div>
+
+        <h2>Payment method</h2>
+        <div class="payment-options">
+          <label *ngFor="let m of paymentMethods">
+            <input type="radio" name="paymentMethod" [value]="m.value" [(ngModel)]="paymentMethod" />
+            {{ m.label }}
+          </label>
+        </div>
+        <p class="hint">This starter doesn't collect real card details yet -- see README for wiring up Stripe Elements.</p>
+
+        <p class="error" *ngIf="orderError">{{ orderError }}</p>
+        <button class="checkout-btn" (click)="placeOrder()" [disabled]="placingOrder">
+          {{ placingOrder ? 'Placing order…' : 'Place order' }}
+        </button>
+      </section>
+    </ng-container>
+  </ng-container>
+</div>

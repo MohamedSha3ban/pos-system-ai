@@ -15,6 +15,8 @@ public interface IApplicationDbContext
     DbSet<Tenant> Tenants { get; }
     DbSet<Location> Locations { get; }
     DbSet<User> Users { get; }
+    DbSet<Role> Roles { get; }
+    DbSet<UserRoleAssignment> UserRoleAssignments { get; }
 
     DbSet<Category> Categories { get; }
     DbSet<Product> Products { get; }
