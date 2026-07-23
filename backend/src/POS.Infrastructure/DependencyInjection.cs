@@ -1,9 +1,11 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using POS.Application.Common.Behaviors;
 using POS.Application.Common.Interfaces;
 using POS.Application.Modules.Catalog;
 using POS.Application.Modules.Identity;
+using POS.Application.Modules.Identity.Services;
 using POS.Application.Modules.Orders;
 using POS.Application.Modules.Storefront;
 using POS.Infrastructure.Modules.Identity;
@@ -18,6 +20,10 @@ namespace POS.Infrastructure;
 /// AddXModule() extension (Application layer: use-cases/services; Infrastructure layer:
 /// concrete implementations) so modules stay independently registerable/testable and
 /// could be extracted into separate services later with minimal rewiring here.
+///
+/// This is shared by all three API gateway projects (Admin, Ecommerce, Mobile) -- each
+/// gateway calls AddInfrastructure() and gets the exact same modules, MediatR handlers,
+/// and DbContexts wired up; only the *controllers* each gateway exposes differ.
 /// </summary>
 public static class DependencyInjection
 {
@@ -34,6 +40,15 @@ public static class DependencyInjection
 
         services.AddScoped<IWriteDbContext>(sp => sp.GetRequiredService<WriteDbContext>());
         services.AddScoped<IReadDbContext>(sp => sp.GetRequiredService<ReadDbContext>());
+
+        // Mediator: every command/query + handler across every module (see each module's
+        // Commands/ and Queries/ folders) is discovered by assembly scan. The
+        // LoggingBehavior pipeline behavior wraps all of them.
+        services.AddMediatR(cfg =>
+        {
+            cfg.RegisterServicesFromAssembly(typeof(AuthService).Assembly);
+            cfg.AddOpenBehavior(typeof(LoggingBehavior<,>));
+        });
 
         // Application-layer modules (use-cases)
         services.AddIdentityApplicationModule();

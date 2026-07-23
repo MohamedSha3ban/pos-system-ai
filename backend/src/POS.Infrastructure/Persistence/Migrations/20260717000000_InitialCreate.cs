@@ -14,7 +14,7 @@ namespace POS.Infrastructure.Persistence.Migrations
     // possible without the actual tool.
     //
     // Recommended: once you can restore packages locally, delete this file and run
-    //   dotnet ef migrations add InitialCreate --context WriteDbContext --project src/POS.Infrastructure --startup-project src/POS.API
+    //   dotnet ef migrations add InitialCreate --context WriteDbContext --project src/POS.Infrastructure --startup-project src/POS.Gateway.Admin
     // EF will generate the correct migration (Up/Down + Designer + Snapshot) from the
     // current model -- diff it against this file as a sanity check; the schema should match.
     /// <inheritdoc />

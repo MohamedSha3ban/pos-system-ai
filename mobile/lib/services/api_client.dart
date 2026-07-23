@@ -3,10 +3,12 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Central HTTP client: attaches the JWT (from AuthService) to every request
-/// and points at the same POS.API backend the Angular web app talks to.
+/// and points at POS.Gateway.Mobile -- a dedicated gateway exposing only what this app
+/// calls (login, product/category CRUD, checkout, Stripe create-intent). It does NOT
+/// talk to POS.Gateway.Admin, even though both ultimately hit the same database.
 class ApiClient {
-  // TODO: swap for the deployed API URL (or 10.0.2.2 for Android emulator -> localhost).
-  static const String baseUrl = 'https://localhost:5001/api';
+  // TODO: swap for the deployed gateway URL (or 10.0.2.2 for Android emulator -> localhost).
+  static const String baseUrl = 'https://localhost:5003/api';
 
   Future<String?> _token() async {
     final prefs = await SharedPreferences.getInstance();

@@ -1,6 +1,6 @@
-# AI-Powered POS — Two-Portal Architecture
+# AI-Powered POS — Mediator + Three-Gateway Architecture
 
-.NET 8 modular-monolith backend, with **two separate Angular web apps** — an admin/back-office portal and a public customer storefront — plus a Flutter mobile app for staff.
+.NET 8 modular monolith, fronted by **three separate API gateway projects** (one per client), a mediator layer (MediatR) decoupling every controller from concrete services, a CQRS-lite read/write database split, real RBAC, and Stripe payments.
 
 As before: this sandbox has no network access to NuGet/pub.dev/npm registries, so I wrote real, correct source files but couldn't `dotnet build` / `ng serve` / `flutter run` them here. Restore packages locally to run everything.
 
@@ -8,113 +8,91 @@ As before: this sandbox has no network access to NuGet/pub.dev/npm registries, s
 
 ```
 pos-system/
-  backend/          ASP.NET Core 8 -- modular monolith (Identity/RBAC, Catalog, Orders, Payments, Insights, Storefront)
-  web-admin/        Angular 18 -- staff/back-office portal (Users, Roles & Permissions, Tenants, Products, Categories, Inventory, POS checkout)
-  web-storefront/   Angular 18 -- public customer portal (browse, cart, customer accounts, self-checkout)
-  mobile/           Flutter -- staff app (POS checkout + catalog CRUD), unchanged by this pass
+  backend/
+    src/
+      POS.Domain/              Entities, enums, shared Permissions catalog
+      POS.Application/         Services (business logic) + Commands/Queries/Handlers (MediatR) + read/write context interfaces
+      POS.Infrastructure/      WriteDbContext, ReadDbContext, payment processors, JWT, composition root
+      POS.Gateway.Admin/       API #1 -- staff/back-office (port 5001)
+      POS.Gateway.Ecommerce/   API #2 -- public storefront (port 5002)
+      POS.Gateway.Mobile/      API #3 -- staff mobile app (port 5003)
+  web-admin/          Angular -- talks ONLY to POS.Gateway.Admin
+  web-storefront/     Angular -- talks ONLY to POS.Gateway.Ecommerce
+  mobile/             Flutter -- talks ONLY to POS.Gateway.Mobile
 ```
 
-**Scope note:** this round of work covers the two *web* portals in full. The Flutter app remains the staff-facing app from before (POS checkout + product/category CRUD) -- it wasn't extended with the new Users/Roles/Tenants/Inventory screens or turned into a second customer-facing mobile app. Both are natural next steps that follow the same pattern already established, just not built out here to keep this pass focused.
+**All three gateways share one database and one set of business logic** (Domain/Application/Infrastructure) -- they're not three different backends, they're three different *front doors* onto the same modular monolith, each exposing only the controllers relevant to its client. This is the Backend-for-Frontend (BFF) pattern.
 
-## Backend: what's new
+## Mediator (MediatR)
 
-### Real RBAC (not just an enum)
-- **`Role`** (tenant-scoped, e.g. Owner/Manager/Cashier, plus any custom roles a tenant creates) holds a comma-separated list of permission codes (`Domain.Common.Permissions` -- a fixed catalog: `users.manage`, `roles.manage`, `products.manage`, `categories.manage`, `inventory.manage`, `orders.view`, `orders.checkout`, `tenants.manage`).
-- **`UserRoleAssignment`** is the many-to-many between `User` and `Role`.
-- Every tenant gets three seeded system roles on signup (Owner = everything, Manager = catalog + orders, Cashier = checkout only) -- editable, but not deletable.
-- Staff JWTs carry one `permission` claim per granted permission, computed at login by flattening the user's assigned roles. A custom `[RequirePermission("products.manage")]` attribute (`POS.API/Authorization`) gates controller actions.
-- **Platform admin**: a separate, simpler mechanism -- `User.IsPlatformAdmin` (bool). Not settable via any API; flip it directly in the database for your first platform operator (see "Seeding a platform admin" below). Gated by `[RequirePlatformAdmin]`, used only by `TenantsController`.
+Every controller action across all three gateways now does the same thing: build a Command or Query record, call `_mediator.Send(...)`, return the result. No controller injects a concrete `*Service` anymore.
 
-### Storefront module (new)
-Customer identity is deliberately separate from staff `User`/`Role` -- a `Customer` (already existed for loyalty tracking) now optionally has a `PasswordHash` and can register/log in to a specific tenant's storefront. Customer JWTs carry no permissions (a customer can only ever act as themselves) and are scoped to one tenant.
+```csharp
+[HttpPost]
+[RequirePermission(Permissions.ProductsManage)]
+public async Task<ActionResult<ProductDto>> Create(CreateProductRequest request, CancellationToken ct)
+    => Ok(await _mediator.Send(new CreateProductCommand(TenantId, request), ct));
+```
 
-- `POST /api/storefront/{tenantId}/auth/register` / `/login` -- customer account, public
-- `GET /api/storefront/{tenantId}/products` -- public catalog browsing, `[AllowAnonymous]`
-- `POST /api/storefront/checkout` -- customer self-checkout, requires a customer JWT
+Each module has `Commands/` and `Queries/` folders (e.g. `POS.Application/Modules/Catalog/Commands/CatalogCommands.cs`) holding `IRequest<TResponse>` records plus their `IRequestHandler<TRequest, TResponse>`. **The handlers are deliberately thin** -- they call straight into the existing `*Service` classes, which already contain the real business logic and are already correctly split across `IWriteDbContext`/`IReadDbContext`. Nothing about the read/write reasoning changed; the mediator sits *above* it, not instead of it.
 
-### Orders: in-store vs online
-`Order` now has a `Channel` (`InStore` | `Online`) and a **nullable** `CashierUserId` (null for online orders -- no staff member rang it up). `OrderService.CreateOrderAsync` is shared by both `OrdersController` (staff, in-store) and `StorefrontOrdersController` (customer, online) -- same checkout logic, same payment orchestration, same stock decrement, different actor.
+**Why bother, if the handlers are just pass-throughs?** One `LoggingBehavior` (`POS.Application/Common/Behaviors`) wraps all ~25 requests across every module -- that's the concrete payoff: a cross-cutting concern implemented once instead of copy-pasted into every controller or service method. Validation, caching, authorization, or transaction-wrapping could each be added as another pipeline behavior the same way, without touching a single handler.
 
-### Inventory as its own surface
-Alongside `ProductsController`'s existing stock field, there's now a dedicated `InventoryController` (`GET/PATCH /api/inventory`) that lists stock across every location with reorder points and a `isLow` flag -- the admin portal's Inventory screen.
+## Three API gateways
 
-### Migration
-Rewritten (still hand-authored -- see the in-file comment) to include the RBAC tables, `Order.Channel`, nullable `CashierUserId`, `Tenant.IsActive`, and `Customer.PasswordHash`. Same caveat as before: delete it and run `dotnet ef migrations add InitialCreate --context WriteDbContext` locally once you can restore packages, to get a tooling-verified migration + Designer/Snapshot files. Only `WriteDbContext` ever gets migrations -- see the read/write split section below.
+| Gateway | Port | Exposes | Used by |
+|---|---|---|---|
+| **POS.Gateway.Admin** | 5001 | Auth, Users, Roles, Permissions, Tenants (platform-admin only), Products, Categories, Inventory, Orders (staff checkout), Insights, Stripe (create-intent + webhook) | `web-admin` |
+| **POS.Gateway.Ecommerce** | 5002 | Storefront auth (customer register/login), public catalog browsing, customer checkout, Stripe create-intent | `web-storefront` |
+| **POS.Gateway.Mobile** | 5003 | Auth, Products, Categories, Orders (staff checkout), Insights, Stripe create-intent -- trimmed to exactly what the Flutter app calls, no Users/Roles/Tenants/Inventory-list | `mobile` |
 
-### Read/write database split (CQRS-lite)
-Two `DbContext`s, two connection strings, wired through the same DI-registered interfaces every service already depended on -- **`IWriteDbContext`** (exposes `DbSet<T>`, backed by `WriteDbContext`, always the primary database) and **`IReadDbContext`** (exposes `IQueryable<T>` only -- no `Add`/`Update`/`Remove`/`SaveChanges` reachable through the type at all -- backed by `ReadDbContext`, points at a read replica in production).
+Each is a real, separately runnable ASP.NET Core project (own `Program.cs`, own `appsettings.json`, own JWT signing secret, own CORS policy locked to exactly one client origin) that calls the same `AddInfrastructure()` composition root. **Only `POS.Gateway.Admin` runs EF migrations** (`db.Database.Migrate()` in its `Program.cs`) -- the other two assume the schema is already current, since duplicate/racing migration attempts across processes is exactly the kind of thing you don't want three copies of.
 
-**The split isn't "all reads go to Read."** Every service was reviewed individually: a read that must be consistent with a write *in the same operation* stays on `IWriteDbContext`; an independent read (a list screen, a login lookup, an analytics query) goes to `IReadDbContext`. Concretely:
+**Distinct JWT secrets per gateway is intentional, not an oversight.** A token issued by one gateway is only ever sent back to that same gateway (each client only ever talks to its own gateway) -- there's no cross-gateway token validation happening, so there's no requirement for secrets to match. Keeping them separate means a leaked Mobile gateway secret doesn't compromise Admin gateway tokens.
 
-| Goes through **Write** | Goes through **Read** |
-|---|---|
-| `OrderService.CreateOrderAsync` -- entirely on Write, including the product/price/stock lookups. Checkout deciding "is this in stock" against a possibly-lagging replica is the textbook reason not to split this. | `ProductService.GetCatalogAsync` / `GetByIdAsync` -- the highest-traffic read in the app (POS, storefront, admin grid all hit this) |
-| Every `Create`/`Update`/`Delete` method -- writes, then builds its response DTO from the entities already in the write context's tracker rather than re-querying (avoids a just-created row briefly 404ing against a lagging replica) | `UserService.GetAllAsync`, `RoleService.GetAllAsync`, `TenantService.GetAllAsync`, `InventoryService.GetAllAsync` -- independent list screens |
-| `CustomerAuthService.RegisterAsync` -- check-email-then-create needs to see its own check | `AuthService.LoginAsync`, `CustomerAuthService.LoginAsync` -- pure reads; a login moments after registration hitting replication lag is an accepted, retry-succeeds trade-off |
-| `RoleService.DeleteAsync`'s "is this role still assigned to anyone" guard -- must see current state before deleting | `SimpleMovingAverageForecastingService` (the AI reorder-suggestions feature) -- a heavier 30-day analytical scan with no reason to compete with checkout traffic on the primary |
+## Backend: RBAC, Storefront module, read/write split
 
-**Schema is shared, migrations are not.** `PosModelConfiguration.Configure()` (`POS.Infrastructure/Persistence`) holds the entity mapping both contexts use -- same tables, same indexes, same relationships -- so there's one place to change it. Only `WriteDbContext` ever gets a migration; `ReadDbContext`'s schema is expected to arrive via database-level replication (e.g. Postgres streaming replication) in production, exactly like its data does.
+*(Carried over from previous work -- summarized here; see inline code comments for full detail.)*
 
-**Local dev without replica infrastructure:** `appsettings.json` has separate `Write` and `Read` connection strings; point both at the same local Postgres database and everything works correctly -- you just don't get the actual scaling benefit until you add a real replica and repoint `Read` at it.
+- **RBAC**: `Role` (tenant-scoped, holds a CSV of permission codes from a fixed `Permissions` catalog) + `UserRoleAssignment`. Every tenant seeds Owner/Manager/Cashier on signup. Platform-admin access is a `User.IsPlatformAdmin` boolean, set manually in the DB (see below) -- not self-service.
+- **Storefront module**: `Customer` has its own optional `PasswordHash` and JWT (no permissions, scoped to one tenant) -- entirely separate identity from staff `User`.
+- **Orders**: `Order.Channel` (`InStore`/`Online`) + nullable `CashierUserId` let one `OrderService`/`CheckoutCommand` serve both staff (Admin/Mobile gateways) and customer (Ecommerce gateway) checkout.
+- **Read/write split**: `IWriteDbContext` (primary, all mutations + any read needing same-transaction consistency -- checkout, registration) vs `IReadDbContext` (replica-ready, independent list/browse/report reads). Both share one `PosModelConfiguration`.
 
 ### Seeding a platform admin
-There's no API for this by design (it shouldn't be self-service). After registering at least one tenant through the admin portal, run:
 ```sql
 UPDATE "Users" SET "IsPlatformAdmin" = true WHERE "Email" = 'you@example.com';
 ```
-That user will then see the Tenants section in the admin portal.
-
-## web-admin (staff/back-office portal)
-
-Sidebar-shell layout (`src/app/shell`), routes nested underneath it, each item shown/hidden based on the logged-in user's permissions (`AuthService.hasPermission(code)`) or platform-admin flag:
-
-- **POS checkout** -- unchanged from before (staff-assisted, in-store)
-- **Products / Categories** -- unchanged CRUD from before
-- **Inventory** (new) -- stock levels across locations, inline adjust, low-stock highlighting
-- **Users** (new) -- create/deactivate staff accounts, assign roles
-- **Roles & Permissions** (new) -- create custom roles, toggle permission checkboxes, edit/delete (system roles can't be deleted)
-- **Tenants** (new, platform-admin only) -- cross-tenant list, activate/deactivate a business
-
-## web-storefront (public customer portal)
-
-A separate, standalone Angular app -- deliberately has no knowledge of staff auth, roles, or the admin API surface. Public product grid → cart (in-memory `CartService` using signals) → checkout, which prompts for customer login/registration inline before placing the order.
-
-**Important limitation:** this starter serves **one tenant's shop per deployment** -- `environment.ts` has a hardcoded `tenantId`/`locationId`. A real multi-tenant storefront would resolve the tenant from a subdomain or custom domain (e.g. `shop.acmecoffee.com` → look up tenant by domain) rather than a build-time constant. Set `tenantId` to the value returned when you register a business through the admin portal.
-
-**Also not wired up yet (same as before):** real card collection. The checkout screen has a payment-method picker but doesn't mount an actual Stripe Elements card form -- `StripeService.createIntent()` exists and is ready to use once you add `@stripe/stripe-js`.
+That user will then see the Tenants section in `web-admin` (talking to `POS.Gateway.Admin`).
 
 ## Running it
 
 ```bash
-# Backend
+# Backend -- three gateways, three terminals
 cd backend
 dotnet restore
-dotnet ef migrations add InitialCreate --context WriteDbContext --project src/POS.Infrastructure --startup-project src/POS.API
-dotnet run --project src/POS.API   # Swagger at https://localhost:5001/swagger
+dotnet ef migrations add InitialCreate --context WriteDbContext --project src/POS.Infrastructure --startup-project src/POS.Gateway.Admin
+dotnet run --project src/POS.Gateway.Admin       # https://localhost:5001/swagger
+dotnet run --project src/POS.Gateway.Ecommerce   # https://localhost:5002/swagger
+dotnet run --project src/POS.Gateway.Mobile      # https://localhost:5003/swagger
 
-# Admin portal
-cd web-admin
-npm install
-ng serve   # defaults to http://localhost:4200
+# Admin portal (talks to :5001)
+cd web-admin && npm install && ng serve   # http://localhost:4200
 
-# Storefront (run on a different port since both are Angular apps)
-cd web-storefront
-npm install
-ng serve --port 4201   # set environment.ts tenantId first!
+# Storefront (talks to :5002)
+cd web-storefront && npm install && ng serve --port 4201   # set environment.ts tenantId first!
 
-# Mobile (staff app, unchanged)
-cd mobile
-flutter pub get
-flutter run
+# Mobile (talks to :5003, staff app)
+cd mobile && flutter pub get && flutter run
 ```
 
 ## Suggested next implementation steps (in order)
 
-1. Run `dotnet ef migrations add InitialCreate --context WriteDbContext` locally and confirm both portals end-to-end against Postgres.
-2. Provision an actual Postgres read replica and point the `Read` connection string at it -- right now both connection strings point at the same database, so the split is architecturally real but not yet delivering its scaling benefit.
-3. Seed a platform admin (see above) and confirm the Tenants screen in web-admin.
+1. Run `dotnet ef migrations add InitialCreate --context WriteDbContext` locally (via `POS.Gateway.Admin` as startup project) and confirm all three gateways end-to-end against Postgres.
+2. Provision an actual Postgres read replica and point each gateway's `Read` connection string at it.
+3. Seed a platform admin and confirm the Tenants screen in web-admin.
 4. Wire up real Stripe Elements (both web apps) / `flutter_stripe` (mobile) client-side card collection.
-5. Resolve storefront tenant by subdomain/custom domain instead of a hardcoded `environment.ts` value, if you want one storefront deployment to serve multiple tenants.
-6. Extend the Flutter app with the same Users/Roles/Tenants/Inventory screens, or build a Flutter storefront app mirroring `web-storefront` -- same backend, no new endpoints needed.
-7. Add a real tax engine, refunds/voids, regional payment rails (still open from before -- see `OrderService`/`IPaymentProcessor`).
-8. Layer in the LLM-based "ask your data" reporting feature from the original plan (Insights module).
+5. Resolve storefront tenant by subdomain/custom domain instead of a hardcoded `environment.ts` value.
+6. Extend the Flutter app with the Users/Roles/Tenants/Inventory screens (would mean pointing those specific calls at `POS.Gateway.Admin` instead of Mobile, or adding them to the Mobile gateway if you want mobile staff to manage those too), or build a Flutter storefront app talking to `POS.Gateway.Ecommerce`.
+7. Add a validation pipeline behavior (e.g. FluentValidation + a `ValidationBehavior<TRequest,TResponse>`) alongside `LoggingBehavior` -- the mediator's already wired for it.
+8. Real tax engine, refunds/voids, regional payment rails, and the LLM-based "ask your data" reporting feature -- all still open from before.
