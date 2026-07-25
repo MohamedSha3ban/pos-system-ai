@@ -1,0 +1,27 @@
+<div class="admin-wrap">
+  <header class="admin-header">
+    <h1>My Sessions</h1>
+    <button class="danger-btn" (click)="logoutAllDevices()" [disabled]="loggingOutAll">Log out all devices</button>
+  </header>
+  <p class="hint">
+    Every device/browser currently signed in as you. A session here corresponds to one refresh
+    token issued at login -- it disappears once it's logged out or expires
+    (staff sessions last 7 days of inactivity).
+  </p>
+
+  <p class="error" *ngIf="errorMessage">{{ errorMessage }}</p>
+
+  <table class="admin-table" *ngIf="sessions.length">
+    <thead><tr><th>Signed in</th><th>Expires</th><th>IP address</th><th>Device</th><th></th></tr></thead>
+    <tbody>
+      <tr *ngFor="let s of sessions">
+        <td>{{ s.createdAtUtc | date:'medium' }}</td>
+        <td>{{ s.expiresAtUtc | date:'medium' }}</td>
+        <td>{{ s.createdByIp || '—' }}</td>
+        <td class="ua-cell">{{ s.userAgent || '—' }}</td>
+        <td><span class="badge system" *ngIf="s.isCurrent">This device</span></td>
+      </tr>
+    </tbody>
+  </table>
+  <p *ngIf="!sessions.length">No active sessions.</p>
+</div>

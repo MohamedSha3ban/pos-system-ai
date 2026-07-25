@@ -25,6 +25,7 @@ public static class PosModelConfiguration
         modelBuilder.Entity<User>();
         modelBuilder.Entity<Role>();
         modelBuilder.Entity<UserRoleAssignment>();
+        modelBuilder.Entity<RefreshToken>();
         modelBuilder.Entity<Category>();
         modelBuilder.Entity<Product>();
         modelBuilder.Entity<InventoryItem>();
@@ -32,6 +33,7 @@ public static class PosModelConfiguration
         modelBuilder.Entity<Order>();
         modelBuilder.Entity<OrderItem>();
         modelBuilder.Entity<Payment>();
+        modelBuilder.Entity<CustomerRefreshToken>();
 
         modelBuilder.Entity<Product>().HasQueryFilter(p => !p.IsDeleted);
         modelBuilder.Entity<Category>().HasQueryFilter(c => !c.IsDeleted);
@@ -48,6 +50,14 @@ public static class PosModelConfiguration
         modelBuilder.Entity<Customer>().HasIndex(c => new { c.TenantId, c.Email })
             .IsUnique()
             .HasFilter("\"Email\" IS NOT NULL");
+
+        // TokenHash lookups happen on every refresh call -- unique + indexed for O(log n)
+        // lookup instead of a table scan. UserId/CustomerId indexes back the "list my
+        // active sessions" queries.
+        modelBuilder.Entity<RefreshToken>().HasIndex(t => t.TokenHash).IsUnique();
+        modelBuilder.Entity<RefreshToken>().HasIndex(t => t.UserId);
+        modelBuilder.Entity<CustomerRefreshToken>().HasIndex(t => t.TokenHash).IsUnique();
+        modelBuilder.Entity<CustomerRefreshToken>().HasIndex(t => t.CustomerId);
 
         modelBuilder.Entity<Product>()
             .HasOne(p => p.Category)

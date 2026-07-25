@@ -7,6 +7,7 @@ public static class StorefrontApplicationModule
 {
     public static IServiceCollection AddStorefrontApplicationModule(this IServiceCollection services)
     {
+        services.AddScoped<CustomerSessionService>();
         services.AddScoped<CustomerAuthService>();
         return services;
     }

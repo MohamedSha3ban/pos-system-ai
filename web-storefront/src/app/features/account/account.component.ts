@@ -33,6 +33,6 @@ export class AccountComponent {
   }
 
   logout(): void {
-    this.account.logout();
+    this.account.logout().subscribe();
   }
 }

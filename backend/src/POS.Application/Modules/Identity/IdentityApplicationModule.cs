@@ -7,6 +7,7 @@ public static class IdentityApplicationModule
 {
     public static IServiceCollection AddIdentityApplicationModule(this IServiceCollection services)
     {
+        services.AddScoped<SessionService>();
         services.AddScoped<AuthService>();
         services.AddScoped<UserService>();
         services.AddScoped<RoleService>();

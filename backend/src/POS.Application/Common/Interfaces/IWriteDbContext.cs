@@ -25,6 +25,7 @@ public interface IWriteDbContext
     DbSet<User> Users { get; }
     DbSet<Role> Roles { get; }
     DbSet<UserRoleAssignment> UserRoleAssignments { get; }
+    DbSet<RefreshToken> RefreshTokens { get; }
 
     DbSet<Category> Categories { get; }
     DbSet<Product> Products { get; }
@@ -34,6 +35,7 @@ public interface IWriteDbContext
     DbSet<Order> Orders { get; }
     DbSet<OrderItem> OrderItems { get; }
     DbSet<Payment> Payments { get; }
+    DbSet<CustomerRefreshToken> CustomerRefreshTokens { get; }
 
     Task<int> SaveChangesAsync(CancellationToken ct = default);
 }

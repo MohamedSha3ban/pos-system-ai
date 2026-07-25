@@ -28,6 +28,7 @@ public class ReadDbContext : DbContext, IReadDbContext
     public IQueryable<User> Users => Set<User>();
     public IQueryable<Role> Roles => Set<Role>();
     public IQueryable<UserRoleAssignment> UserRoleAssignments => Set<UserRoleAssignment>();
+    public IQueryable<RefreshToken> RefreshTokens => Set<RefreshToken>();
 
     public IQueryable<Category> Categories => Set<Category>();
     public IQueryable<Product> Products => Set<Product>();
@@ -37,6 +38,7 @@ public class ReadDbContext : DbContext, IReadDbContext
     public IQueryable<Order> Orders => Set<Order>();
     public IQueryable<OrderItem> OrderItems => Set<OrderItem>();
     public IQueryable<Payment> Payments => Set<Payment>();
+    public IQueryable<CustomerRefreshToken> CustomerRefreshTokens => Set<CustomerRefreshToken>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

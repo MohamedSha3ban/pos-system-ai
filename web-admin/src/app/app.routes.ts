@@ -15,7 +15,8 @@ export const routes: Routes = [
       { path: 'inventory', loadComponent: () => import('./features/inventory/inventory.component').then(m => m.InventoryComponent) },
       { path: 'users', loadComponent: () => import('./features/users/users.component').then(m => m.UsersComponent) },
       { path: 'roles', loadComponent: () => import('./features/roles/roles.component').then(m => m.RolesComponent) },
-      { path: 'tenants', loadComponent: () => import('./features/tenants/tenants.component').then(m => m.TenantsComponent), canActivate: [platformAdminGuard] }
+      { path: 'tenants', loadComponent: () => import('./features/tenants/tenants.component').then(m => m.TenantsComponent), canActivate: [platformAdminGuard] },
+      { path: 'sessions', loadComponent: () => import('./features/sessions/sessions.component').then(m => m.SessionsComponent) }
     ]
   }
 ];

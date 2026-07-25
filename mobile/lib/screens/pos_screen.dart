@@ -4,7 +4,9 @@ import '../models/product.dart';
 import '../models/cart_line.dart';
 import '../services/product_service.dart';
 import '../services/order_service.dart';
+import '../services/auth_service.dart';
 import 'products_admin_screen.dart';
+import 'login_screen.dart';
 
 // TODO: replace with the real active-location id from tenant/session context.
 const String defaultLocationId = '00000000-0000-0000-0000-000000000000';
@@ -19,6 +21,7 @@ class PosScreen extends StatefulWidget {
 class _PosScreenState extends State<PosScreen> {
   final _productService = ProductService();
   final _orderService = OrderService();
+  final _authService = AuthService();
   final _currency = NumberFormat.currency(symbol: '\$');
 
   List<Product> _products = [];
@@ -90,6 +93,18 @@ class _PosScreenState extends State<PosScreen> {
                 MaterialPageRoute(builder: (_) => const ProductsAdminScreen()),
               );
               _loadCatalog(); // refresh in case products/stock changed
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.logout),
+            tooltip: 'Log out',
+            onPressed: () async {
+              await _authService.logout();
+              if (!context.mounted) return;
+              Navigator.of(context).pushAndRemoveUntil(
+                MaterialPageRoute(builder: (_) => const LoginScreen()),
+                (route) => false,
+              );
             },
           ),
         ],

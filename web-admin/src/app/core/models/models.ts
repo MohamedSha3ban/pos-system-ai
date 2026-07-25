@@ -1,11 +1,22 @@
 export interface AuthResponse {
-  token: string;
-  expiresAtUtc: string;
+  accessToken: string;
+  accessTokenExpiresAtUtc: string;
+  refreshToken: string;
+  refreshTokenExpiresAtUtc: string;
   fullName: string;
   tenantId: string;
   isPlatformAdmin: boolean;
   roleNames: string[];
   permissions: string[];
+}
+
+export interface SessionInfo {
+  id: string;
+  createdAtUtc: string;
+  expiresAtUtc: string;
+  createdByIp?: string;
+  userAgent?: string;
+  isCurrent: boolean;
 }
 
 export interface Product {

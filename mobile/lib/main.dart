@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'app_navigation.dart';
 import 'services/auth_service.dart';
 import 'screens/login_screen.dart';
 import 'screens/pos_screen.dart';
@@ -14,6 +15,7 @@ class PosApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'POS Mobile',
+      navigatorKey: appNavigatorKey,
       theme: ThemeData(useMaterial3: true, colorSchemeSeed: Colors.indigo),
       home: const _StartupGate(),
     );

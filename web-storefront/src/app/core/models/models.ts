@@ -15,8 +15,10 @@ export interface CartLine {
 }
 
 export interface CustomerAuthResponse {
-  token: string;
-  expiresAtUtc: string;
+  accessToken: string;
+  accessTokenExpiresAtUtc: string;
+  refreshToken: string;
+  refreshTokenExpiresAtUtc: string;
   fullName: string;
   tenantId: string;
 }

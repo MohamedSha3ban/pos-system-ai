@@ -10,8 +10,10 @@ public record RegisterTenantRequest(
 public record LoginRequest(string Email, string Password);
 
 public record AuthResponse(
-    string Token,
-    DateTime ExpiresAtUtc,
+    string AccessToken,
+    DateTime AccessTokenExpiresAtUtc,
+    string RefreshToken,
+    DateTime RefreshTokenExpiresAtUtc,
     string FullName,
     Guid TenantId,
     bool IsPlatformAdmin,

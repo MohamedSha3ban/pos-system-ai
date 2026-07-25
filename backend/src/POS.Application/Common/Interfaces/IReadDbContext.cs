@@ -24,6 +24,7 @@ public interface IReadDbContext
     IQueryable<User> Users { get; }
     IQueryable<Role> Roles { get; }
     IQueryable<UserRoleAssignment> UserRoleAssignments { get; }
+    IQueryable<RefreshToken> RefreshTokens { get; }
 
     IQueryable<Category> Categories { get; }
     IQueryable<Product> Products { get; }
@@ -33,4 +34,5 @@ public interface IReadDbContext
     IQueryable<Order> Orders { get; }
     IQueryable<OrderItem> OrderItems { get; }
     IQueryable<Payment> Payments { get; }
+    IQueryable<CustomerRefreshToken> CustomerRefreshTokens { get; }
 }

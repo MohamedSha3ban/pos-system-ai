@@ -65,6 +65,27 @@ UPDATE "Users" SET "IsPlatformAdmin" = true WHERE "Email" = 'you@example.com';
 ```
 That user will then see the Tenants section in `web-admin` (talking to `POS.Gateway.Admin`).
 
+## Session & token management
+
+Short-lived JWT access tokens paired with long-lived opaque refresh tokens, stored hashed server-side, with rotation-with-reuse-detection and real server-side revocation.
+
+**Access tokens** are JWTs (unchanged mechanism from before) but now short-lived: **15 minutes for staff, 30 for customers** (`Domain.Common.TokenLifetimes`). Sent as a bearer token on every request, validated statelessly like before -- nothing new here except the shorter TTL.
+
+**Refresh tokens** are opaque random strings (`RefreshTokenGenerator`, 64 bytes of `RandomNumberGenerator` output, URL-safe base64) -- not JWTs, nothing to decode. Only their SHA-256 hash is ever persisted (`RefreshToken`/`CustomerRefreshToken` tables), so a database read or leak doesn't hand out usable credentials. Lifetimes: **7 days for staff, 30 for customers**.
+
+**Rotation + reuse detection** (`SessionService`/`CustomerSessionService`, both Write-context-only -- see their doc comments): every call to `/auth/refresh` revokes the presented token and issues a brand new one. If a token that's *already revoked* gets presented again -- meaning it was already used once, a strong signal of theft/replay -- every active session for that user is revoked immediately, forcing a fresh login everywhere. This is the standard defense against a stolen refresh token being used alongside the legitimate one.
+
+**Why short-lived access tokens instead of a token blacklist:** logout/revocation works by killing the refresh token's ability to mint new access tokens -- it does NOT invalidate an already-issued access token (JWTs are stateless; blacklisting them would need a distributed cache checked on every request). A short access-token TTL is what makes this acceptable: a revoked session's last access token simply expires on its own within minutes rather than staying usable for hours. This is a deliberate, documented trade-off, not a gap.
+
+**Endpoints** (present on both staff gateways -- Admin and Mobile -- and, for customers, the Ecommerce gateway under `/api/storefront/{tenantId}/auth/`):
+- `POST /auth/login`, `POST /auth/register-tenant` -- now return `{ accessToken, accessTokenExpiresAtUtc, refreshToken, refreshTokenExpiresAtUtc, ... }` instead of a single token
+- `POST /auth/refresh` -- `{ refreshToken }` → new pair. No `[Authorize]` -- possession of a valid refresh token is the authentication (standard OAuth2 refresh-grant pattern), so this also works once the access token has already expired
+- `POST /auth/logout` -- revokes exactly the presented session, idempotent, no `[Authorize]`
+- `POST /auth/logout-all` -- staff only, `[Authorize]`, revokes every session for the caller ("log out everywhere")
+- `GET /auth/sessions` -- staff only, `[Authorize]`, lists active sessions (created time, expiry, IP, user agent); pass `?currentRefreshToken=` to flag which one is "this device"
+
+**Clients**: both Angular apps got a proper refresh-on-401 HTTP interceptor (`core/interceptors/auth.interceptor.ts` in each) that transparently refreshes and retries a failed request, with in-flight-refresh deduping so N concurrent 401s trigger exactly one refresh call rather than racing each other against the rotation. The Flutter app's `ApiClient` does the same thing without RxJS -- catch 401, refresh, retry once, and if the refresh token is also dead, clear storage and bounce to the login screen via a global `navigatorKey`. `web-admin` also has a **My Sessions** screen (`features/sessions`) showing exactly what `GET /auth/sessions` returns, with a "log out all devices" button.
+
 ## Running it
 
 ```bash
@@ -95,4 +116,5 @@ cd mobile && flutter pub get && flutter run
 5. Resolve storefront tenant by subdomain/custom domain instead of a hardcoded `environment.ts` value.
 6. Extend the Flutter app with the Users/Roles/Tenants/Inventory screens (would mean pointing those specific calls at `POS.Gateway.Admin` instead of Mobile, or adding them to the Mobile gateway if you want mobile staff to manage those too), or build a Flutter storefront app talking to `POS.Gateway.Ecommerce`.
 7. Add a validation pipeline behavior (e.g. FluentValidation + a `ValidationBehavior<TRequest,TResponse>`) alongside `LoggingBehavior` -- the mediator's already wired for it.
-8. Real tax engine, refunds/voids, regional payment rails, and the LLM-based "ask your data" reporting feature -- all still open from before.
+8. `web-storefront` and the mobile app get the refresh/logout mechanics but not a dedicated "my sessions" list screen (that only exists in `web-admin`) -- the backend already supports it identically for customers (`CustomerSessionService` has the same shape), so it's just a UI screen away if wanted.
+9. Real tax engine, refunds/voids, regional payment rails, and the LLM-based "ask your data" reporting feature -- all still open from before.

@@ -4,7 +4,7 @@ using POS.Application.Modules.Identity.Services;
 
 namespace POS.Application.Modules.Identity.Commands;
 
-public record RegisterTenantCommand(RegisterTenantRequest Request) : IRequest<AuthResponse>;
+public record RegisterTenantCommand(RegisterTenantRequest Request, string? Ip, string? UserAgent) : IRequest<AuthResponse>;
 public record CreateUserCommand(Guid TenantId, CreateUserRequest Request) : IRequest<UserDto>;
 public record UpdateUserCommand(Guid TenantId, Guid UserId, UpdateUserRequest Request) : IRequest<UserDto?>;
 public record DeactivateUserCommand(Guid TenantId, Guid UserId) : IRequest<bool>;
@@ -12,6 +12,9 @@ public record CreateRoleCommand(Guid TenantId, UpsertRoleRequest Request) : IReq
 public record UpdateRoleCommand(Guid TenantId, Guid RoleId, UpsertRoleRequest Request) : IRequest<RoleDto?>;
 public record DeleteRoleCommand(Guid TenantId, Guid RoleId) : IRequest<(bool Success, string? Error)>;
 public record SetTenantActiveCommand(Guid TenantId, bool IsActive) : IRequest<bool>;
+public record RefreshTokenCommand(string RefreshToken, string? Ip, string? UserAgent) : IRequest<AuthResponse?>;
+public record LogoutCommand(string RefreshToken) : IRequest<bool>;
+public record LogoutAllCommand(Guid TenantId, Guid UserId) : IRequest<bool>;
 
 // Handlers are thin by design -- all business logic already lives in the Services
 // (and is already split across IWriteDbContext/IReadDbContext appropriately). The
@@ -23,7 +26,31 @@ public class RegisterTenantCommandHandler : IRequestHandler<RegisterTenantComman
     private readonly AuthService _authService;
     public RegisterTenantCommandHandler(AuthService authService) => _authService = authService;
     public Task<AuthResponse> Handle(RegisterTenantCommand request, CancellationToken ct) =>
-        _authService.RegisterTenantAsync(request.Request, ct);
+        _authService.RegisterTenantAsync(request.Request, request.Ip, request.UserAgent, ct);
+}
+
+public class RefreshTokenCommandHandler : IRequestHandler<RefreshTokenCommand, AuthResponse?>
+{
+    private readonly SessionService _sessionService;
+    public RefreshTokenCommandHandler(SessionService sessionService) => _sessionService = sessionService;
+    public Task<AuthResponse?> Handle(RefreshTokenCommand request, CancellationToken ct) =>
+        _sessionService.RefreshAsync(request.RefreshToken, request.Ip, request.UserAgent, ct);
+}
+
+public class LogoutCommandHandler : IRequestHandler<LogoutCommand, bool>
+{
+    private readonly SessionService _sessionService;
+    public LogoutCommandHandler(SessionService sessionService) => _sessionService = sessionService;
+    public Task<bool> Handle(LogoutCommand request, CancellationToken ct) =>
+        _sessionService.RevokeAsync(request.RefreshToken, ct);
+}
+
+public class LogoutAllCommandHandler : IRequestHandler<LogoutAllCommand, bool>
+{
+    private readonly SessionService _sessionService;
+    public LogoutAllCommandHandler(SessionService sessionService) => _sessionService = sessionService;
+    public Task<bool> Handle(LogoutAllCommand request, CancellationToken ct) =>
+        _sessionService.RevokeAllAsync(request.TenantId, request.UserId, ct);
 }
 
 public class CreateUserCommandHandler : IRequestHandler<CreateUserCommand, UserDto>

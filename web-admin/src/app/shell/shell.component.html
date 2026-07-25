@@ -8,6 +8,7 @@
       <a routerLink="/users" routerLinkActive="active" *ngIf="hasPermission('users.manage')">Users</a>
       <a routerLink="/roles" routerLinkActive="active" *ngIf="hasPermission('roles.manage')">Roles & Permissions</a>
       <a routerLink="/tenants" routerLinkActive="active" *ngIf="isPlatformAdmin">Tenants</a>
+      <a routerLink="/sessions" routerLinkActive="active">My Sessions</a>
     </nav>
     <div class="sidebar-footer">
       <div class="user-name">{{ session?.fullName }}</div>

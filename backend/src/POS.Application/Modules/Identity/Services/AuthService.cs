@@ -1,7 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using POS.Application.Common.Interfaces;
 using POS.Application.Modules.Identity.DTOs;
-using POS.Application.Modules.Identity.Interfaces;
 using POS.Domain.Common;
 using POS.Domain.Modules.Identity.Entities;
 
@@ -11,13 +10,13 @@ public class AuthService
 {
     private readonly IWriteDbContext _writeDb;
     private readonly IReadDbContext _readDb;
-    private readonly ITokenService _tokenService;
+    private readonly SessionService _sessionService;
 
-    public AuthService(IWriteDbContext writeDb, IReadDbContext readDb, ITokenService tokenService)
+    public AuthService(IWriteDbContext writeDb, IReadDbContext readDb, SessionService sessionService)
     {
         _writeDb = writeDb;
         _readDb = readDb;
-        _tokenService = tokenService;
+        _sessionService = sessionService;
     }
 
     /// <summary>
@@ -26,7 +25,7 @@ public class AuthService
     /// from the in-memory objects rather than re-querying (which, against a real replica,
     /// could momentarily 404 due to replication lag).
     /// </summary>
-    public async Task<AuthResponse> RegisterTenantAsync(RegisterTenantRequest request, CancellationToken ct = default)
+    public async Task<AuthResponse> RegisterTenantAsync(RegisterTenantRequest request, string? ip, string? userAgent, CancellationToken ct = default)
     {
         var tenant = new Tenant
         {
@@ -75,17 +74,15 @@ public class AuthService
 
         await _writeDb.SaveChangesAsync(ct);
 
-        var permissions = Permissions.TenantAssignable.ToList();
-        var token = _tokenService.GenerateToken(owner, new[] { ownerRole.Name }, permissions);
-        return new AuthResponse(token, DateTime.UtcNow.AddHours(8), owner.FullName, tenant.Id, owner.IsPlatformAdmin, new List<string> { ownerRole.Name }, permissions);
+        return await _sessionService.CreateSessionAsync(owner, new List<string> { ownerRole.Name }, Permissions.TenantAssignable.ToList(), ip, userAgent, ct);
     }
 
     /// <summary>
     /// Pure read -- uses the read side. Login happening moments after registration and
     /// briefly hitting replication lag is an accepted, standard trade-off (retry succeeds);
-    /// nothing here writes.
+    /// nothing here writes (session creation, which does write, happens in SessionService).
     /// </summary>
-    public async Task<AuthResponse?> LoginAsync(LoginRequest request, CancellationToken ct = default)
+    public async Task<AuthResponse?> LoginAsync(LoginRequest request, string? ip, string? userAgent, CancellationToken ct = default)
     {
         var email = request.Email.ToLowerInvariant();
         var user = await _readDb.Users.FirstOrDefaultAsync(u => u.Email == email && !u.IsDeleted && u.IsActive, ct);
@@ -105,7 +102,6 @@ public class AuthService
             .Distinct()
             .ToList();
 
-        var token = _tokenService.GenerateToken(user, roleNames, permissions);
-        return new AuthResponse(token, DateTime.UtcNow.AddHours(8), user.FullName, user.TenantId, user.IsPlatformAdmin, roleNames, permissions);
+        return await _sessionService.CreateSessionAsync(user, roleNames, permissions, ip, userAgent, ct);
     }
 }

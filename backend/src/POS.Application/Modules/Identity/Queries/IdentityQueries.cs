@@ -4,18 +4,19 @@ using POS.Application.Modules.Identity.Services;
 
 namespace POS.Application.Modules.Identity.Queries;
 
-public record LoginQuery(LoginRequest Request) : IRequest<AuthResponse?>;
+public record LoginQuery(LoginRequest Request, string? Ip, string? UserAgent) : IRequest<AuthResponse?>;
 public record GetUsersQuery(Guid TenantId) : IRequest<List<UserDto>>;
 public record GetRolesQuery(Guid TenantId) : IRequest<List<RoleDto>>;
 public record GetAvailablePermissionsQuery : IRequest<List<string>>;
 public record GetTenantsQuery : IRequest<List<TenantSummaryDto>>;
+public record GetActiveSessionsQuery(Guid TenantId, Guid UserId, string? CurrentRefreshToken) : IRequest<List<SessionDto>>;
 
 public class LoginQueryHandler : IRequestHandler<LoginQuery, AuthResponse?>
 {
     private readonly AuthService _authService;
     public LoginQueryHandler(AuthService authService) => _authService = authService;
     public Task<AuthResponse?> Handle(LoginQuery request, CancellationToken ct) =>
-        _authService.LoginAsync(request.Request, ct);
+        _authService.LoginAsync(request.Request, request.Ip, request.UserAgent, ct);
 }
 
 public class GetUsersQueryHandler : IRequestHandler<GetUsersQuery, List<UserDto>>
@@ -48,4 +49,12 @@ public class GetTenantsQueryHandler : IRequestHandler<GetTenantsQuery, List<Tena
     public GetTenantsQueryHandler(TenantService tenantService) => _tenantService = tenantService;
     public Task<List<TenantSummaryDto>> Handle(GetTenantsQuery request, CancellationToken ct) =>
         _tenantService.GetAllAsync(ct);
+}
+
+public class GetActiveSessionsQueryHandler : IRequestHandler<GetActiveSessionsQuery, List<SessionDto>>
+{
+    private readonly SessionService _sessionService;
+    public GetActiveSessionsQueryHandler(SessionService sessionService) => _sessionService = sessionService;
+    public Task<List<SessionDto>> Handle(GetActiveSessionsQuery request, CancellationToken ct) =>
+        _sessionService.GetActiveSessionsAsync(request.TenantId, request.UserId, request.CurrentRefreshToken, ct);
 }
